@@ -1,0 +1,41 @@
+#+TITLE: ex3
+
+* How to Break It
++ Take the =age= variable out of the first =printf= call.
+  → We got 2 warnings and it works as =ex1= did.
++ Run this execution
+  #+BEGIN_SRC sh :exports both :results verbatim
+./ex3
+  #+END_SRC
+
+  #+RESULTS:
+  : I am -462876648 years old.
+  : I am 72 inches tall.
++ Put =printf= back the way it was, and then don't set =age= to an initial value
+  by changing that line to =int age;=, and then rebuild it and run it again.
+
+  It got warnings as follows:
+  #+BEGIN_SRC sh :exports both :results verbatim
+make 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  : cc -Wall -g  -I/usr/local/opt/gettext/include -I/usr/local/opt/llvm/include -I/usr/local/opt/zlib/include -I/usr/local/opt/gettext/include -I/usr/local/opt/llvm/include -I/usr/local/opt/zlib/include -L/usr/local/opt/gettext/lib -L/usr/local/opt/llvm/lib -L/usr/local/opt/zlib/lib  ex3.c   -o ex3
+  : ex3.c:8:36: warning: variable 'age' is uninitialized when used here [-Wuninitialized]
+  :     printf("I am %d years old.\n", age);
+  :                                    ^~~
+  : ex3.c:5:12: note: initialize the variable 'age' to silence this warning
+  :     int age;
+  :            ^
+  :             = 0
+  : 1 warning generated.
+
+  And got the absurd results still.
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+./ex3
+  #+END_SRC
+
+  #+RESULTS:
+  : I am 267268150 years old.
+  : I am 72 inches tall.

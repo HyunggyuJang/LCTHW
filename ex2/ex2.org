@@ -1,0 +1,209 @@
+#+TITLE: ex2
+
+* How to Break It
+Here we are going to experiment with the following setting:
+#+BEGIN_SRC makefile
+CFLAGS=-Wall -g
+
+clean: rm -f ex1
+#+END_SRC
+
+Then if we run this make file as
+#+BEGIN_SRC sh :exports both
+make clean
+#+END_SRC
+
+#+RESULTS:
+: make: *** No rule to make target `rm', needed by `clean'.  Stop.
+
+So from this experiment, we can /guess/ that the command line commands should be
+specified below the target specification.
+* Extra Credit
++ Create an =all: ex1= target that will build =ex1= with just the command
+  =make=.
+
+  #+BEGIN_SRC makefile
+CFLAGS=-Wall -g
+
+all: ex1
+
+clean:
+	rm -f ex1
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both
+make all
+  #+END_SRC
+
+  #+RESULTS:
+  : cc -Wall -g  -I/usr/local/opt/gettext/include -I/usr/local/opt/llvm/include -I/usr/local/opt/zlib/include -I/usr/local/opt/gettext/include -I/usr/local/opt/llvm/include -I/usr/local/opt/zlib/include -L/usr/local/opt/gettext/lib -L/usr/local/opt/llvm/lib -L/usr/local/opt/zlib/lib  ex1.c   -o ex1
++ Read =man make= to find out more information on how to run it.
+
+  From its description part, we can learn that =make= is for resolving
+  dependencies for whatever it is to work appropriately.
+
+  And it works as follows. It compares the last modified date of given files and
+  then if it were updated after it modified by =make= program by itself; if it
+  is, and in addition to that, if the object that should be build in current
+  process depends on that file, =make= update that file first using whatever
+  command defined in the makefile and then update subsequent files in turns.
+
+  And by default it looks for =GNUmakefile=, =makefile=, =Makefile= in turns if
+  we do not supply any options to specify what file should be used as
+  =makefile=. Also, it recommend us that we'd better to use =Makefile= since it
+  would appear near the beginning of a directory listing -- via the ordering of
+  ASCII characters, upper case letter exceeded by lower case letter.
+
+  We could check the command bound to given target command without executing
+  that via
+  #+BEGIN_SRC sh
+make -n
+  #+END_SRC
+
+  It would be helpful when we tempted to look what command would be actually
+  called without getting bogged down to the any other data in the make file
+  since we don't need to look into that. We can simulate any situation we want
+  to inspect with conjunction of =-n= and =-W=:
+  #+BEGIN_SRC sh :exports both
+make -W ex1.c -n
+  #+END_SRC
+
+  #+RESULTS:
+  : cc -Wall -g  -I/usr/local/opt/gettext/include -I/usr/local/opt/llvm/include -I/usr/local/opt/zlib/include -I/usr/local/opt/gettext/include -I/usr/local/opt/llvm/include -I/usr/local/opt/zlib/include -L/usr/local/opt/gettext/lib -L/usr/local/opt/llvm/lib -L/usr/local/opt/zlib/lib  ex1.c   -o ex1
+ 
++ Read =man cc= to find out more information on what the flags =-Wall= and =-g=
+  do.
+
+  Zed explained those flags in the video; nevertheless let's check those by
+  ourselves.
+
+  Firstly, as overall description, =clang= is integrated compiler that do the
+  several things
+  - Preprocessing
+
+    Cope with the =#define= and =#include= like preprocessing commands.
+  - Parsing and Semantic Analysis
+
+    Tokenize given source code so that produces a parse tree. In turns it
+    transformed into Abstract Syntax Tree via Semantic analyzer.
+   
+    In SICP, the illustrative pseudo compiler did only sementic analysis since
+    the syntax of Lisp already has that of AST as form.
+  - Code Generation and Optimization
+
+    This is where the assembly code is generated via optimization process. Since
+    the resulting code is for assembler, this phase is highly machine dependent.
+  - Assembler
+
+    This is where the =Mach-o= file got generated.
+  - Linker
+
+    Merge multiple object (=Mach-o=) files into an executable (typically ends
+    with =.out=, =.dylib=, =.so=).
+
+
+  And via using option, we can specify what stage we want as output like the
+  following:
+  #+BEGIN_SRC sh
+  cc -E ex1.c -o preprocessed.i
+  #+END_SRC
+
+  We can also specify the level of optimization. After that description, we got
+  encountered with =-g= option family; =-g= is for generating debug information.
+
+  Unfortunately we couldn't find any =-Wall= information in the man page. It says
+  #+BEGIN_QUOTE
+  Diagnostics Options
+      -fshow-column,     -fshow-source-location,     -fcaret-diagnostics,     -fdiagnostics-fixit-info,     -fdiagnostics-parseable-fixits,    -fdiagnostics-print-source-range-info,
+      -fprint-source-range-info, -fdiagnostics-show-option, -fmessage-length
+              These options control how Clang prints out information about diagnostics (errors and warnings). Please see the Clang User's Manual for more information.
+  #+END_QUOTE
+
+  And along the web page, we got the [[https://clang.llvm.org/docs/DiagnosticsReference.html#wall][-Wall]] information; it is so huge amount that
+  I can not digest right away.
++ Research =Makefile= s online and see if you can improve this one.
+
+  We could improve our =Makefile= to be general referencing [[https://opensource.com/article/18/8/what-how-makefile][this blog]], but I
+  couldn't take the gist of them yet; let me just pass over this clause.
++ Find a =Makefile= in another C project and try to understand what it's doing.
+ 
+  Here we take the =Makefile= of =Unity=
+  #+BEGIN_SRC makefile
+# ==========================================
+#   Unity Project - A Test Framework for C
+#   Copyright (c) 2007 Mike Karlesky, Mark VanderVoord, Greg Williams
+#   [Released under MIT License. Please refer to license.txt for details]
+# ==========================================
+
+#We try to detect the OS we are running on, and adjust commands as needed
+ifeq ($(OS),Windows_NT)
+  ifeq ($(shell uname -s),) # not in a bash-like shell
+	CLEANUP = del /F /Q
+	MKDIR = mkdir
+  else # in a bash-like shell, like msys
+	CLEANUP = rm -f
+	MKDIR = mkdir -p
+  endif
+	TARGET_EXTENSION=.exe
+else
+	CLEANUP = rm -f
+	MKDIR = mkdir -p
+	TARGET_EXTENSION=.out
+endif
+
+C_COMPILER=gcc
+ifeq ($(shell uname -s), Darwin)
+C_COMPILER=clang
+endif
+
+UNITY_ROOT=../..
+
+CFLAGS=-std=c89
+CFLAGS += -Wall
+CFLAGS += -Wextra
+CFLAGS += -Wpointer-arith
+CFLAGS += -Wcast-align
+CFLAGS += -Wwrite-strings
+CFLAGS += -Wswitch-default
+CFLAGS += -Wunreachable-code
+CFLAGS += -Winit-self
+CFLAGS += -Wmissing-field-initializers
+CFLAGS += -Wno-unknown-pragmas
+CFLAGS += -Wstrict-prototypes
+CFLAGS += -Wundef
+CFLAGS += -Wold-style-definition
+#CFLAGS += -Wno-misleading-indentation
+
+TARGET_BASE1=test1
+TARGET_BASE2=test2
+TARGET1 = $(TARGET_BASE1)$(TARGET_EXTENSION)
+TARGET2 = $(TARGET_BASE2)$(TARGET_EXTENSION)
+SRC_FILES1=$(UNITY_ROOT)/src/unity.c src/ProductionCode.c  test/TestProductionCode.c  test/test_runners/TestProductionCode_Runner.c
+SRC_FILES2=$(UNITY_ROOT)/src/unity.c src/ProductionCode2.c test/TestProductionCode2.c test/test_runners/TestProductionCode2_Runner.c
+INC_DIRS=-Isrc -I$(UNITY_ROOT)/src
+SYMBOLS=
+
+all: clean default
+
+default: $(SRC_FILES1) $(SRC_FILES2)
+	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES1) -o $(TARGET1)
+	$(C_COMPILER) $(CFLAGS) $(INC_DIRS) $(SYMBOLS) $(SRC_FILES2) -o $(TARGET2)
+	- ./$(TARGET1)
+	- ./$(TARGET2)
+
+test/test_runners/TestProductionCode_Runner.c: test/TestProductionCode.c
+	ruby $(UNITY_ROOT)/auto/generate_test_runner.rb test/TestProductionCode.c  test/test_runners/TestProductionCode_Runner.c
+test/test_runners/TestProductionCode2_Runner.c: test/TestProductionCode2.c
+	ruby $(UNITY_ROOT)/auto/generate_test_runner.rb test/TestProductionCode2.c test/test_runners/TestProductionCode2_Runner.c
+
+clean:
+	$(CLEANUP) $(TARGET1) $(TARGET2)
+
+ci: CFLAGS += -Werror
+ci: default
+  #+END_SRC
+
+  Basically, above file setting the environment variables that would be used in
+  the target command, and then use them; but I don't know how the =-= works in
+  above file -- guess that it just execute the executable files, here are the
+  test executables.

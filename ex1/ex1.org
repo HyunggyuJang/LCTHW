@@ -1,0 +1,87 @@
+#+TITLE: ex1
+
+* How to Break it
+Modify the line,
+#+BEGIN_SRC C
+    printf("You are %d miles away.\n", distance);
+#+END_SRC
+
+To
+#+BEGIN_SRC C
+    printf("You are %d miles away.\n");
+#+END_SRC
+
+Then I got the result from the shell,
+#+BEGIN_SRC sh :exports both
+./ex1
+#+END_SRC
+
+#+RESULTS:
+: You are -505421800 miles away.
+
+As Zed explained in the video, it is due to the program obliviously take the
+next memory chunk (whatever it is) as integer to be substituted at =%d=.
+* Extra Credit
++ Open the =ex1= file and change or delete random parts.
+
+  After randomly deleting one character from the binary execution, we got the
+  behavior of that in shell as
+  #+BEGIN_SRC sh :exports both
+./ex1
+  #+END_SRC
+
+  #+RESULTS:
+  : sh: line 1: 27839 Killed: 9               ./ex1 2>&1
+
+  And if we try to debug this, we got
+  #+BEGIN_EXAMPLE
+~/D/C/C/l/c/My_code/ex1 [master] λ lldb ex1
+(lldb) target create "ex1"
+error: symbol[0] has invalid string table offset 0xf000000 in /Users/hyunngyu-jang/Documents/CS/C/learn_c_the_hard_way/code/My_code/ex1/ex1, ignoring symbol
+error: symbol[1] has invalid string table offset 0xf000000 in /Users/hyunngyu-jang/Documents/CS/C/learn_c_the_hard_way/code/My_code/ex1/ex1, ignoring symbol
+error: symbol[2] has invalid string table offset 0x1000000 in /Users/hyunngyu-jang/Documents/CS/C/learn_c_the_hard_way/code/My_code/ex1/ex1, ignoring symbol
+error: symbol[3] has invalid string table offset 0x1000000 in /Users/hyunngyu-jang/Documents/CS/C/learn_c_the_hard_way/code/My_code/ex1/ex1, ignoring symbol
+Current executable set to 'ex1' (x86_64).
+(lldb) run
+error: Malformed Mach-o file
+(lldb)
+  #+END_EXAMPLE
+
+  Let's search what the [[https://en.wikipedia.org/wiki/Mach-O][Mach-o file]], which is just the file format the compiled
+  code possesses.
++ Print out five more lines of text or something more complex than "hello word."
+ 
+  Here is my design:
+  #+BEGIN_SRC C
+    int distance = 100;
+    int increment = 20;
+
+    // this is also a comment
+    printf("You are %d miles away.\n", distance);
+    printf("You are %d miles away.\n", distance + increment);
+    printf("You are %d miles away.\n", distance + 2 * increment);
+    printf("You are %d miles away.\n", distance + 3 * increment);
+    printf("You are %d miles away.\n", distance + 4 * increment);
+    printf("You are %d miles away.\n", distance + 5 * increment);
+  #+END_SRC
+
+  And the result:
+  #+BEGIN_SRC sh :exports both :results verbatim
+./ex1
+  #+END_SRC
+
+  #+RESULTS:
+  : You are 100 miles away.
+  : You are 120 miles away.
+  : You are 140 miles away.
+  : You are 160 miles away.
+  : You are 180 miles away.
+  : You are 200 miles away.
++ Run =man 3 printf= and read about this function and many others.
+
+  This man page is for the Library Functions Manual. It says =printf= has lots
+  of its variations and all of those are for formatted output conversion.
++ For each line, write out the symbols you don't understand...
+
+  Since I've read all of the contents of K&R (+ almost of TDD for embedded C),
+  I've already solved all of the mysterious things behind the code.

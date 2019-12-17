@@ -1,0 +1,41 @@
+#+TITLE: ex11
+* Extra Credit
++ Does =char= array with 4 elements can be treated as if it were integer given
+  that integer is 4 bytes?
+
+  #+BEGIN_SRC C :exports both
+char test[4] = { 0, 0, 1, 0};
+int testInt = 256; // 2^8
+
+printf("char array plus integer results to %d\n", test + testInt);
+  #+END_SRC
+
+  #+RESULTS:
+  : char array plus integer results to -368996424
+
+  No!! In above excerpt, =test= is just holding /address/ to the character array
+  whereas =testInt= holding the value of integer /assigned/ to it!
+
+  So it just got broken as much as when one add pointer to integer like this:
+  #+BEGIN_SRC C :exports both
+int test[4] = { 0, 0, 1, 0};               // It does not matter whatever type it is
+int testInt = 256;              // 2^8
+
+printf("char array plus integer results to %d\n", test + testInt);
+  #+END_SRC
+
+  #+RESULTS:
+  : char array plus integer results to -447892832
+
+  Just do pointer arithmetic if you got that meaning in heart.
+
+  But we can force it via casting:
+  #+BEGIN_SRC C :exports both
+char test[4] = { 0, 1, 0, 0 };
+int testInt = 256; // 2^8
+
+printf("char array plus integer results to %d\n", *((int *) test) + testInt);
+  #+END_SRC
+
+  #+RESULTS:
+  : char array plus integer results to 512

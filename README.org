@@ -1,0 +1,14 @@
+#+TITLE:  Learn C The Hard Way
+#+DATE:    December 15, 2019
+* Learn C The Hard Way
+** What this repository is for?
+This is my private study log for the book (or course) /Learn C The Hard Way/,
+abbreviated as /LCTHW/.
+** The contents:
++ [[org:../Documents/CS/C/learn_c_the_hard_way/code/My_code/ex1/ex1.org][Exercise 1]]
++ [[file:ex2/ex2.org][Exercise 2]]
++ [[file:ex3/ex3.org][Exercise 3]]
++ [[file:ex4/ex4.org][Exercise 4]]
++ [[file:ex11/ex11.org][Exercise 11]]
++ [[file:ex16/ex16.org][Exercise 16]]
++ [[file:ex17/ex17.org][Exercise 17]]

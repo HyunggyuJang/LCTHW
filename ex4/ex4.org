@@ -1,0 +1,42 @@
+#+TITLE: Using a Debugger
+
+* How to Break It
+Let us try first the small variation from previous exercise:
+#+BEGIN_SRC C
+#include <stdio.h>
+
+int main()
+{
+    int *shouldCrush = 0;
+    int height = 72;
+
+    printf("I am %d years old.\n", *shouldCrush);
+    printf("I am %d inches tall.\n", height);
+
+    return 0;
+}
+#+END_SRC
+
+Then we got the great response from the debugger:
+#+BEGIN_EXAMPLE
+(lldb) target create "ex4"
+Current executable set to 'ex4' (x86_64).
+(lldb) run
+Process 31384 launched: '/Users/hyunngyu-jang/Documents/CS/C/learn_c_the_hard_way/code/My_code/ex4/ex4' (x86_64)
+Process 31384 stopped
+,* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+    frame #0: 0x0000000100000f32 ex4`main at ex4.c:8:36
+   5   	    int *shouldCrush = 0;
+   6   	    int height = 72;
+   7
+-> 8   	    printf("I am %d years old.\n", *shouldCrush);
+    	                                   ^
+   9   	    printf("I am %d inches tall.\n", height);
+   10
+   11  	    return 0;
+Target 0: (ex4) stopped.
+#+END_EXAMPLE
+
+Tough it is quite cryptic for us to interpret, if you advanced enough to
+understand the addresses, it means, in a nutshell, we accessed bad address,
+=0x0=.
