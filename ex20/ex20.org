@@ -1,0 +1,38 @@
+#+TITLE: Advanced Debugging Techniques
+* Extra Credit
++ You can enable core dumps on your OS, and when a program crashes, you'll get a
+  core file. This core file is like a postmortem of the program that you can
+  load up to see what happended right at the crash and what caused it. Change
+  =ex18.c= so that it crashes after a few iterations, then try to get a core
+  dump and analyze it.
+
+  Form =man core=, we got the clue how we can enable core dumps on my OS. By
+  googling, I found the conventions used in this concept is to use =ulimit= make
+  core dumps. NOTE: We should call the crashed file within which session we
+  called =ulimit -c unlimited=. Then we would got
+  #+BEGIN_SRC sh :exports both
+./ex18 2 5 1
+  #+END_SRC
+
+  #+RESULTS
+  #+BEGIN_EXAMPLE
+1 2 5
+Bus error: 10 (core dumped)
+  #+END_EXAMPLE
+
+  The dumped file created as =/cores/core.<pid>=. We can inspect this via
+  =lldb=:
+  #+BEGIN_SRC sh
+ls -lt /cores                   # Identify latest core dump.
+lldb ex18 -c /cores/core.5780   # Set the core file with executable
+  #+END_SRC
+ 
+  #+BEGIN_EXAMPLE
+(lldb) target create "ex18" --core "/cores/core.5780"
+Core file '/cores/core.5780' (x86_64) was loaded.
+(lldb) bt
+,* thread #1, stop reason = signal SIGSTOP
+  * frame #0: 0x000000010e1ebd47 ex18`test_sorting(numbers=0x00007fb014402b10, count=3, srt=(ex18`bubble_sort at ex18.c:30), cmp=(ex18`sorted_order at ex18.c:97)) at ex18.c:137:17
+    frame #1: 0x000000010e1ebe3a ex18`main(argc=4, argv=0x00007ffee1a14280) at ex18.c:158:5
+    frame #2: 0x00007fff6889a3d5 libdyld.dylib`start + 1
+  #+END_EXAMPLE

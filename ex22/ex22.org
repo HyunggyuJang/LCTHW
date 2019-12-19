@@ -1,0 +1,561 @@
+#+TITLE: The Stack, Scope, and Globals
+* Type out by myself
+* What I Should See
+#+BEGIN_SRC sh :exports both :results verbatim
+cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+cc -Wall -g -DNDEBUG  ex22_main.c ex22.o   -o ex22_main
+./ex22_main 2>&1
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+[INFO] (ex22_main.c:26) My name is: Hyunggyu Jang, age: 23
+[INFO] (ex22_main.c:30) My age is now: 100
+[INFO] (ex22_main.c:33) THE_SIZE is: 1000
+[INFO] (ex22.c:31) I think size is: 1000
+[INFO] (ex22_main.c:38) THE_SIZE is now: 9
+[INFO] (ex22.c:31) I think size is: 9
+[INFO] (ex22_main.c:42) Ratio at first: 1.000000
+[INFO] (ex22_main.c:43) Ratio again: 2.000000
+[INFO] (ex22_main.c:44) Ratio once more: 10.000000
+[INFO] (ex22_main.c:8) count is: 4
+[INFO] (ex22_main.c:16) count is at exit: 4
+[INFO] (ex22_main.c:20) count after assign: 3000
+[INFO] (ex22_main.c:8) count is: 80
+[INFO] (ex22_main.c:13) count in this scope is 100
+[INFO] (ex22_main.c:16) count is at exit: 80
+[INFO] (ex22_main.c:20) count after assign: 3000
+[INFO] (ex22_main.c:51) count after calling scope_demo: 4
+#+end_example
+* How to Break It
++ Try to directly access variables in =ex22.c= from =ex22_main.c= that you think
+  you can't access. For example, can you get a =ratio= inside =update_ratio=?
+  What if you had a pointer to it?
+
+  If we add the following code into the =main=,
+  #+BEGIN_SRC C
+    log_info("Ratio once more: %f", ratio);
+  #+END_SRC
+
+  Obviously we would get error from the compiler undefined variable name
+  =ratio=:
+  #+BEGIN_SRC sh :exports both
+cc -Wall -g -DNDEBUG  ex22_main.c ex22.o   -o ex22_main
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+ex22_main.c:45:37: error: use of undeclared identifier 'ratio'
+    log_info("Ratio once more: %f", ratio);
+                                    ^
+1 error generated.
+  #+END_EXAMPLE
+
+  To test the latter situation needs change to the =update_ratio= as follows
+  #+BEGIN_SRC C
+double update_ratio(double new_ratio, double *staticPointer)
+{
+    static double ratio = 1.0;
+
+    double old_ratio = ratio;
+    ratio = new_ratio;
+
+    staticPointer = &ratio;
+    return old_ratio;
+}
+  #+END_SRC
+
+  Then to test it makes our entry point change its portion as follows
+  #+BEGIN_SRC C
+    // test the ratio function static
+    double *staticPointer = NULL;
+    log_info("Ratio at first: %f", update_ratio(2.0, staticPointer));
+    log_info("Ratio again: %f", update_ratio(10.0, staticPointer));
+    log_info("Ratio once more: %f", update_ratio(300.0, staticPointer));
+    log_info("Ratio accessed via pointer: %f", *staticPointer);
+  #+END_SRC
+ 
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g -DNDEBUG  ex22_main.c ex22.o   -o ex22_main
+  ./ex22_main 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+[INFO] (ex22_main.c:26) My name is: Hyunggyu Jang, age: 23
+[INFO] (ex22_main.c:30) My age is now: 100
+[INFO] (ex22_main.c:33) THE_SIZE is: 1000
+[INFO] (ex22.c:32) I think size is: 1000
+[INFO] (ex22_main.c:38) THE_SIZE is now: 9
+[INFO] (ex22.c:32) I think size is: 9
+[INFO] (ex22_main.c:43) Ratio at first: 1.000000
+[INFO] (ex22_main.c:44) Ratio again: 2.000000
+[INFO] (ex22_main.c:45) Ratio once more: 10.000000
+segmentation fault: 11
+  #+END_EXAMPLE
+
+  We can not even access the static variable inside the function via pointer.
+  Let us check whether =update_ratio= actually assign the static variable's
+  address to the given pointer argument via
+  #+BEGIN_SRC C
+    // test the ratio function static
+    double *staticPointer = NULL;
+    log_info("Ratio at first: %f", update_ratio(2.0, staticPointer));
+    log_info("Ratio again: %f", update_ratio(10.0, staticPointer));
+    log_info("Ratio once more: %f", update_ratio(300.0, staticPointer));
+    check_debug(staticPointer, "update_ratio didn't assign staticPointer.");
+    log_info("Ratio accessed via pointer: %f", *staticPointer);
+
+...
+
+error:
+    return 0;
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  ./ex22_main 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  [INFO] (ex22_main.c:26) My name is: Hyunggyu Jang, age: 23
+  [INFO] (ex22_main.c:30) My age is now: 100
+  [INFO] (ex22_main.c:33) THE_SIZE is: 1000
+  [INFO] (ex22.c:36) I think size is: 1000
+  [INFO] (ex22_main.c:38) THE_SIZE is now: 9
+  [INFO] (ex22.c:36) I think size is: 9
+  [INFO] (ex22_main.c:43) Ratio at first: 1.000000
+  [INFO] (ex22_main.c:44) Ratio again: 2.000000
+  [INFO] (ex22_main.c:45) Ratio once more: 10.000000
+  DEBUG ex22_main.c:46: update_ratio didn't assign staticPointer.
+  #+end_example
+
+  Then we precede the debugging with the function directly:
+  #+BEGIN_SRC C
+double update_ratio(double new_ratio, double *staticPointer)
+{
+    static double ratio = 1.0;
+
+    double old_ratio = ratio;
+    ratio = new_ratio;
+
+    staticPointer = &ratio;
+    check_debug(staticPointer, "update_ratio didn't assign staticPointer.");
+    return old_ratio;
+
+error:
+    return 0;
+}
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  ./ex22_main 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  [INFO] (ex22_main.c:26) My name is: Hyunggyu Jang, age: 23
+  [INFO] (ex22_main.c:30) My age is now: 100
+  [INFO] (ex22_main.c:33) THE_SIZE is: 1000
+  [INFO] (ex22.c:36) I think size is: 1000
+  [INFO] (ex22_main.c:38) THE_SIZE is now: 9
+  [INFO] (ex22.c:36) I think size is: 9
+  [INFO] (ex22_main.c:43) Ratio at first: 1.000000
+  [INFO] (ex22_main.c:44) Ratio again: 2.000000
+  [INFO] (ex22_main.c:45) Ratio once more: 10.000000
+  DEBUG ex22_main.c:46: update_ratio didn't assign staticPointer.
+  #+end_example
+
+  Which means it actually assign the static variable's address to given pointer.
+  At this pointer, by reasoning, we notice we'd passed the pointer to pointer to
+  double since C is by default pass by value.
+
+  Our main function now needs change:
+  #+BEGIN_SRC C
+double update_ratio(double new_ratio, double **staticPointer)
+{
+    static double ratio = 1.0;
+
+    double old_ratio = ratio;
+    ratio = new_ratio;
+
+    *staticPointer = &ratio;
+    return old_ratio;
+}
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  ./ex22_main 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  [INFO] (ex22_main.c:26) My name is: Hyunggyu Jang, age: 23
+  [INFO] (ex22_main.c:30) My age is now: 100
+  [INFO] (ex22_main.c:33) THE_SIZE is: 1000
+  [INFO] (ex22.c:32) I think size is: 1000
+  [INFO] (ex22_main.c:38) THE_SIZE is now: 9
+  [INFO] (ex22.c:32) I think size is: 9
+  [INFO] (ex22_main.c:43) Ratio at first: 1.000000
+  [INFO] (ex22_main.c:44) Ratio again: 2.000000
+  [INFO] (ex22_main.c:45) Ratio once more: 10.000000
+  [INFO] (ex22_main.c:47) Ratio accessed via pointer: 300.000000
+  [INFO] (ex22_main.c:8) count is: 4
+  [INFO] (ex22_main.c:16) count is at exit: 4
+  [INFO] (ex22_main.c:20) count after assign: 3000
+  [INFO] (ex22_main.c:8) count is: 80
+  [INFO] (ex22_main.c:13) count in this scope is 100
+  [INFO] (ex22_main.c:16) count is at exit: 80
+  [INFO] (ex22_main.c:20) count after assign: 3000
+  [INFO] (ex22_main.c:54) count after calling scope_demo: 4
+  #+end_example
+
+  We can access the static (function) variable through the pointer! Now let's
+  try to mutate that!
+  #+BEGIN_SRC C
+    // test the ratio function static
+    double *staticPointer = NULL;
+    log_info("Ratio at first: %f", update_ratio(2.0, &staticPointer));
+    log_info("Ratio again: %f", update_ratio(10.0, &staticPointer));
+    log_info("Ratio once more: %f", update_ratio(300.0, &staticPointer));
+    log_info("Ratio accessed via pointer: %f", *staticPointer);
+    *staticPointer = 257.3;
+    log_info("Ratio mutated via pointer: %f", update_ratio(300.0, &staticPointer));
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  ./ex22_main 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  [INFO] (ex22_main.c:26) My name is: Hyunggyu Jang, age: 23
+  [INFO] (ex22_main.c:30) My age is now: 100
+  [INFO] (ex22_main.c:33) THE_SIZE is: 1000
+  [INFO] (ex22.c:32) I think size is: 1000
+  [INFO] (ex22_main.c:38) THE_SIZE is now: 9
+  [INFO] (ex22.c:32) I think size is: 9
+  [INFO] (ex22_main.c:43) Ratio at first: 1.000000
+  [INFO] (ex22_main.c:44) Ratio again: 2.000000
+  [INFO] (ex22_main.c:45) Ratio once more: 10.000000
+  [INFO] (ex22_main.c:46) Ratio accessed via pointer: 300.000000
+  [INFO] (ex22_main.c:48) Ratio mutated via pointer: 257.300000
+  [INFO] (ex22_main.c:8) count is: 4
+  [INFO] (ex22_main.c:16) count is at exit: 4
+  [INFO] (ex22_main.c:20) count after assign: 3000
+  [INFO] (ex22_main.c:8) count is: 80
+  [INFO] (ex22_main.c:13) count in this scope is 100
+  [INFO] (ex22_main.c:16) count is at exit: 80
+  [INFO] (ex22_main.c:20) count after assign: 3000
+  [INFO] (ex22_main.c:55) count after calling scope_demo: 4
+  #+end_example
+
+  It works as (un)expected!
++ Ditch the =extern= declaration in =ex22.h= to see what errors or warnings you
+  get.
+
+  I expect to receive undeclared variable if we ditch the whole line of
+  =extern=; and duplicate definition error if we ditch just =extern= qualifier.
+
+  Let's try the former one first:
+  #+BEGIN_SRC C
+#ifndef __EX22_H_
+#define __EX22_H_
+
+// makes THE_SIZE in ex22.c available to other .c files
+/* extern int THE_SIZE; */
+
+// gets and sets an internal static variable in ex22.c
+int get_age();
+void set_age(int age);
+
+// updates a static variable that's inside update_ratio
+double update_ratio(double ratio, double **staticPointer);
+
+void print_size();
+
+#endif // __EX22_H_
+  #+END_SRC
+ 
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+ex22_main.c:33:33: error: use of undeclared identifier 'THE_SIZE'
+    log_info("THE_SIZE is: %d", THE_SIZE);
+                                ^
+ex22_main.c:36:5: error: use of undeclared identifier 'THE_SIZE'
+    THE_SIZE = 9;
+    ^
+ex22_main.c:38:37: error: use of undeclared identifier 'THE_SIZE'
+    log_info("THE_SIZE is now: %d", THE_SIZE);
+                                    ^
+3 errors generated.
+  #+END_EXAMPLE
+
+  And the latter one:
+  #+BEGIN_SRC C
+#ifndef __EX22_H_
+#define __EX22_H_
+
+// makes THE_SIZE in ex22.c available to other .c files
+int THE_SIZE;
+
+// gets and sets an internal static variable in ex22.c
+int get_age();
+void set_age(int age);
+
+// updates a static variable that's inside update_ratio
+double update_ratio(double ratio, double **staticPointer);
+
+void print_size();
+
+#endif // __EX22_H_
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  #+END_SRC
+
+  No error! Contrary to our expectation. Then the results become
+  #+BEGIN_SRC sh :exports both :results verbatim
+  ./ex22_main 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  [INFO] (ex22_main.c:26) My name is: Hyunggyu Jang, age: 23
+  [INFO] (ex22_main.c:30) My age is now: 100
+  [INFO] (ex22_main.c:33) THE_SIZE is: 1000
+  [INFO] (ex22.c:32) I think size is: 1000
+  [INFO] (ex22_main.c:38) THE_SIZE is now: 9
+  [INFO] (ex22.c:32) I think size is: 9
+  [INFO] (ex22_main.c:43) Ratio at first: 1.000000
+  [INFO] (ex22_main.c:44) Ratio again: 2.000000
+  [INFO] (ex22_main.c:45) Ratio once more: 10.000000
+  [INFO] (ex22_main.c:46) Ratio accessed via pointer: 300.000000
+  [INFO] (ex22_main.c:48) Ratio mutated via pointer: 257.300000
+  [INFO] (ex22_main.c:8) count is: 4
+  [INFO] (ex22_main.c:16) count is at exit: 4
+  [INFO] (ex22_main.c:20) count after assign: 3000
+  [INFO] (ex22_main.c:8) count is: 80
+  [INFO] (ex22_main.c:13) count in this scope is 100
+  [INFO] (ex22_main.c:16) count is at exit: 80
+  [INFO] (ex22_main.c:20) count after assign: 3000
+  [INFO] (ex22_main.c:55) count after calling scope_demo: 4
+  #+end_example
+
+  To see why this spits out the same results with =extern= declaration version,
+  we make the problem explicit as follows
+  #+BEGIN_SRC C :main no :exports both
+int declaration;
+int declaration = 2;
+
+int main() {
+    printf("declaration after initialization: %d\n", declaration);
+    return 0;
+}
+  #+END_SRC
+
+  #+RESULTS:
+  : declaration after initialization: 2
+
+  And
+  #+BEGIN_SRC C :main no :exports both
+int declaration;
+
+int main() {
+    printf("declaration without initialization: %d\n", declaration);
+    return 0;
+}
+  #+END_SRC
+
+  #+RESULTS:
+  : declaration without initialization: 0
+
+  Now third version:
+  #+BEGIN_SRC C :main no :exports both
+int main() {
+    int declaration;
+    int declaration = 2;
+    printf("declaration without initialization: %d\n", declaration);
+    return 0;
+}
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+/var/folders/2g/yh1q856s0vl6td_twhv6v5g40000gn/T/babel-v3S9F9/C-src-ICmx9S.c:10:9: error: redefinition of 'declaration'
+    int declaration = 2;
+  #+END_EXAMPLE
+
+  To complete our experiment, we finally try
+  #+BEGIN_SRC C :main no :exports both
+int declaration = 2;
+int declaration = 5;
+
+int main() {
+    printf("declaration initialization more than 1 times: %d\n", declaration);
+    return 0;
+}
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+/var/folders/2g/yh1q856s0vl6td_twhv6v5g40000gn/T/babel-v3S9F9/C-src-0gzung.c:9:5: error: redefinition of 'declaration'
+int declaration = 5;
+    ^
+  #+END_EXAMPLE
+
+  It became explicit what was going on under the hood: Without initialization in
+  global scope treated as if it were =extern= declaration; otherwise it treated as
+  /definition/.
+
+  By this reason, there was /no/ error at all.
++ Add =static= or =const= specifiers to different variables, and then try to
+  change them.
+
+  Let's make =THE_SIZE= =const= variable in header file:
+  #+BEGIN_SRC C
+// makes THE_SIZE in ex22.c available to other .c files
+extern const int THE_SIZE;
+  #+END_SRC
+ 
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+ex22.c:5:5: error: redefinition of 'THE_SIZE' with a different type: 'int' vs 'const int'
+int THE_SIZE = 1000;
+    ^
+./ex22.h:5:18: note: previous declaration is here
+extern const int THE_SIZE;
+                 ^
+1 error generated.
+clang: error: no such file or directory: 'ex22.o'
+  #+END_EXAMPLE
+
+  If we resolve the conflict complained by compiler,
+  #+BEGIN_SRC C
+const int THE_SIZE = 1000;
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+ex22_main.c:36:14: error: cannot assign to variable 'THE_SIZE' with const-qualified type 'const int'
+    THE_SIZE = 9;
+    ~~~~~~~~ ^
+./ex22.h:5:18: note: variable 'THE_SIZE' declared const here
+extern const int THE_SIZE;
+~~~~~~~~~~~~~~~~~^~~~~~~~
+1 error generated.
+  #+END_EXAMPLE
+
+  Now let's try to revert =extern= qualifier in header file but the =ex22.c=.
+  #+BEGIN_SRC sh :exports both :results verbatim
+  cc -Wall -g -DNDEBUG -c -o ex22.o ex22.c
+  cc -Wall -g ex22_main.c ex22.o   -o ex22_main
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+ex22.c:5:11: error: redefinition of 'THE_SIZE' with a different type: 'const int' vs 'int'
+const int THE_SIZE = 1000;
+          ^
+./ex22.h:5:12: note: previous declaration is here
+extern int THE_SIZE;
+           ^
+1 error generated.
+clang: error: no such file or directory: 'ex22.o'
+  #+END_EXAMPLE
+
+  So we can not make definition with =const= when it declared without that, vice versa.
+* Extra Credit
++ Research the concept of pass by value versus pass by reference. Write an
+  example of both.
+
+  I've learned this concept beforehand in SICP.
++ Use pointers to gain access to things you shouldn't have access to.
+
+  I've exploited this in =update_ratio= to give access to static variable =ratio=.
++ Use your debugger to see what this kind of access looks like when you do it
+  wrong.
+
+  I've been through this process when I did wrong above accessing at the first
+  place. The value of variable passed to function as parameter does not changed
+  before and after the calling.
++ Write a recursive function that causes a stack overflow.
+
+  #+BEGIN_SRC C :main no
+int stupid_recursive(int i, int j, int k)
+{
+    return stupid_recursive(stupid_recursive(k, i, j), j + k, i);
+}
+
+int main()
+{
+    return stupid_recursive(0, 0, 0);
+}
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both
+make stupid_recursive
+./stupid_recursive
+  #+END_SRC
+
+  #+RESULTS:
+  : sh: line 2:  9625 Segmentation fault: 11  ./stupid_recursive
+
+  Let's run this under the debugger:
+  #+BEGIN_EXAMPLE
+Process 9806 stopped
+,* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=2, address=0x7ffeef270ffc)
+    frame #0: 0x0000000100000f58 stupid_recursive`stupid_recursive(i=<unavailable>, j=<unavailable>, k=<unavailable>) at stupid_recursive.c:2
+   1   	int stupid_recursive(int i, int j, int k)
+-> 2   	{
+   3   	    return stupid_recursive(stupid_recursive(k, i, j), j + k, i);
+   4   	}
+   5
+   6   	int main()
+   7   	{
+Target 0: (stupid_recursive) stopped.
+  #+END_EXAMPLE
++ Rewrite the =Makefile= so that it can build this.
+
+  Here is crude solution by poking around:
+  #+BEGIN_SRC makefile
+CFLAGS=-Wall -g
+
+all: ex22_main
+
+ex22_main: ex22.o
+	cc $(CFLAGS) ex22_main.c ex22.o -o ex22_main
+
+ex22.o: ex22.c
+	cc $(CFLAGS) -DNDEBUG -c -o ex22.o ex22.c
+
+clean:
+	rm ex22_main
+	rm ex22.o
+  #+END_SRC

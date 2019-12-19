@@ -12,3 +12,8 @@ abbreviated as /LCTHW/.
 + [[file:ex11/ex11.org][Exercise 11]]
 + [[file:ex16/ex16.org][Exercise 16]]
 + [[file:ex17/ex17.org][Exercise 17]]
++ [[file:ex18/ex18.org][Exercise 18]]
++ [[file:ex19/ex19.org][Exercise 19]]
++ [[file:ex20/ex20.org][Exercise 20]]
++ [[file:ex21/ex21.org][Exercise 21]]
++ [[file:ex22/ex22.org][Exercise 22]]

@@ -1,0 +1,55 @@
+#+TITLE: Advanced Data Types and Flow Control
+* Type Conversion
+The conversion type order implies =long= would be converted into =int=; this is
+counterintuitive concept from the others. Let's test it:
+#+BEGIN_SRC C :exports both
+long longVar = 2L;
+int intVar = 1;
+printf("long + int results in %u size", sizeof (intVar + longVar));
+#+END_SRC
+
+#+RESULTS:
+: long + int results in 8 size
+
+No it does not agree with our interpretation of the conversion order. Maybe I
+misunderstood the description of that order. Zed may means that the type
+promotion is tested in that order and the /parenthesized clause/ in =int= is
+quite meaningful -- C only convert other types when one side is =int= and the
+other one is either of =char= or =short int=.
+
+From this reasoning, we expect the type conversion of =long + float= would
+result in =float= (although =long= takes up more space than =float=):
+#+BEGIN_SRC C :exports both
+long longVar = 2L;
+float floatVar = 1.0;
+printf("float + long results in %u size", sizeof (longVar + floatVar));
+#+END_SRC
+
+#+RESULTS:
+: float + long results in 4 size
+* Extra Credit
++ Read =stdint.h= or a description of it, and write out all the available size
+  identifiers.
+
+  We got from =stdint.h=
+  #+BEGIN_SRC C
+typedef int8_t           int_least8_t;
+typedef int16_t         int_least16_t;
+typedef int32_t         int_least32_t;
+typedef int64_t         int_least64_t;
+typedef uint8_t         uint_least8_t;
+typedef uint16_t       uint_least16_t;
+typedef uint32_t       uint_least32_t;
+typedef uint64_t       uint_least64_t;
+
+typedef int8_t            int_fast8_t;
+typedef int16_t          int_fast16_t;
+typedef int32_t          int_fast32_t;
+typedef int64_t          int_fast64_t;
+typedef uint8_t          uint_fast8_t;
+typedef uint16_t        uint_fast16_t;
+typedef uint32_t        uint_fast32_t;
+typedef uint64_t        uint_fast64_t;
+  #+END_SRC
+
+  So these are the all the available size of =int=.

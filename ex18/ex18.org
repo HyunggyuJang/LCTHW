@@ -1,0 +1,326 @@
+#+TITLE: Pointers to Functions
+
+* Type the [[file:ex18.c][code]]
+
+* How to Break It
+We add the following code end of =test_sorting=:
+#+BEGIN_SRC C
+#if HACK_FP
+    unsigned char *data = (unsigned char *) cmp;
+    for (i = 0; i < 25; i++) {
+        printf("%02x:", data[i]);
+    }
+    printf("\n");
+#endif
+#+END_SRC
+
+Then, see the result:
+#+BEGIN_SRC sh :exports both :results verbatim
+./ex18 2 3 1 7 4 9 10
+#+END_SRC
+
+#+RESULTS:
+: 1 2 3 4 7 9 10
+: 55:48:89:e5:89:7d:fc:89:75:f8:8b:75:fc:2b:75:f8:89:f0:5d:c3:66:2e:0f:1f:84:
+: 10 9 7 4 3 2 1
+: 55:48:89:e5:89:7d:fc:89:75:f8:8b:75:f8:2b:75:fc:89:f0:5d:c3:66:2e:0f:1f:84:
+: 9 4 7 10 3 2 1
+: 55:48:89:e5:89:7d:f8:89:75:f4:83:7d:f8:00:0f:84:0a:00:00:00:83:7d:f4:00:0f:
+
+And we can break this program by
+#+BEGIN_SRC C
+#if HACK_FP
+    unsigned char *data = (unsigned char *) cmp;
+    for (i = 0; i < 25; i++) {
+        data[i] = i;
+    }
+    printf("\n");
+#endif
+#+END_SRC
+
+#+BEGIN_SRC sh :exports both :results verbatim
+./ex18 2 3 1 7 4 9 10
+#+END_SRC
+
+#+RESULTS:
+#+BEGIN_EXAMPLE
+1 2 3 3 7 9 10
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==6866==ERROR: AddressSanitizer: BUS on unknown address 0x000102794890 (pc 0x000102794a7f bp 0x7ffeed46be50 sp 0x7ffeed46bdf0 T0)
+    #0 0x102794a7e in test_sorting ex18.c:93
+    #1 0x102794c05 in main ex18.c:114
+    #2 0x7fff6f5213d4 in start (libdyld.dylib:x86_64+0x163d4)
+
+==6866==Register values:
+rax = 0x0000000102794890  rbx = 0x0000000000000000  rcx = 0x0000000000000000  rdx = 0x0000000102794890
+rdi = 0x0000100000000000  rsi = 0x00001000204f2912  rbp = 0x00007ffeed46be50  rsp = 0x00007ffeed46bdf0
+ r8 = 0x0000000000000000   r9 = 0x00000fffffffffff  r10 = 0x0000000000000000  r11 = 0xffffffffffffffff
+r12 = 0x0000000000000000  r13 = 0x0000000000000000  r14 = 0x0000000000000000  r15 = 0x0000000000000000
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: BUS ex18.c:93 in test_sorting
+==6866==ABORTING
+abort trap: 6
+#+END_EXAMPLE
+
+* Extra Credit
++ Get a hex editor and open up =ex18=, and then find the sequence of hex digits
+  that start a function to see if you can find the function in the raw program.
+
+  To do this, I use the =Hexl-mode= in emacs.
+
+  The corresponding part is
+  #+BEGIN_EXAMPLE
+00001890: 5548 89e5 897d fc89 75f8 8b75 fc2b 75f8  UH...}..u..u.+u.
+000018a0: 89f0 5dc3 662e 0f1f 8400 0000 0000 6690  ..].f.........f.
+000018b0: 5548 89e5 897d fc89 75f8 8b75 f82b 75fc  UH...}..u..u.+u.
+000018c0: 89f0 5dc3 662e 0f1f 8400 0000 0000 6690  ..].f.........f.
+000018d0: 5548 89e5 897d f889 75f4 837d f800 0f84  UH...}..u..}....
+000018e0: 0a00 0000 837d f400 0f85 0c00 0000 c745  .....}.........E
+000018f0: fc00 0000 00e9 0a00 0000 8b45 f899 f77d  ...........E...}
+00001900: f489 55fc 8b45 fc5d c30f 1f80 0000 0000  ..U..E.]........
+00001910: 5548 89e5 4883 ec60 4889 7df8 8975 f448  UH..H..`H.}..u.H
+  #+END_EXAMPLE
++ Find other random things in your hex editor and change them. Rerun your
+  program and see what happens. Strings you find are the easiest things to change.
+
+  We try to change the following part:
+  #+BEGIN_EXAMPLE
+00001ee0: 5573 6167 653a 2065 7831 3820 3420 3320  Usage: ex18 4 3
+00001ef0: 3120 3520 3600 0000 0000 0000 0000 0000  1 5 6...........
+00001f00: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+00001f10: 0000 0000 0000 0000 0000 0000 0000 0000  ................
+  #+END_EXAMPLE
+
+  As follows
+  #+BEGIN_EXAMPLE
+00001ee0: 4578 616d 203a 2065 7831 3820 3420 3320  Exam : ex18 4 3
+00001ef0: 3120 3520 3600 0000 0000 0000 0000 0000  1 5 6...........
+  #+END_EXAMPLE
+
+  Then we got
+  #+BEGIN_SRC sh
+./ex18
+  #+END_SRC
+
+  #+RESULTS:
+  : ERROR: Exam : ex18 4 3 1 5 6
+
+  We've changed as we wanted.
++ Pass in the wrong function for the =compare_cb= and see what the C compiler
+  complains about.
+
+  In main,
+  #+BEGIN_SRC C
+#if HACK_FP
+    test_sorting(numbers, count, numbers);
+#endif
+  #+END_SRC
+
+  The compiler just warn that incompatible type contract but made the binary
+  file to execute:
+  #+BEGIN_EXAMPLE
+ex18.c:115:34: warning: incompatible pointer types passing 'int *' to parameter of type 'compare_cb'
+      (aka 'int (*)(int, int)') [-Wincompatible-pointer-types]
+    test_sorting(numbers, count, numbers);
+                                 ^~~~~~~
+ex18.c:75:55: note: passing argument to parameter 'cmp' here
+void test_sorting(int *numbers, int count, compare_cb cmp)
+                                                      ^
+1 warning generated.
+
+Compilation finished at Tue Dec 17 16:17:55
+  #+END_EXAMPLE
+
+  Then
+  #+BEGIN_SRC sh :exports both
+./ex18
+  #+END_SRC
+
+  #+RESULTS:
+  : ERROR: Usage: ex18 4 3 1 5 6
+
+  Finally
+  #+BEGIN_SRC sh :exports both
+./ex18 3 2 1 8 4
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==7036==ERROR: AddressSanitizer: BUS on unknown address 0x6030000002e0 (pc 0x6030000002e0 bp 0x7ffee820bdf0 sp 0x7ffee820bd48 T0)
+    #0 0x6030000002df  (<unknown module>)
+    #1 0x1079f4919 in test_sorting ex18.c:78
+    #2 0x1079f4be5 in main ex18.c:115
+    #3 0x7fff6f5213d4 in start (libdyld.dylib:x86_64+0x163d4)
+  #+END_EXAMPLE
++ Pass in =NULL= and watch your program seriously bit it. Then, run the debugger
+  and see what that reports.
+
+  Like preceding one,
+  #+BEGIN_SRC C
+#if HACK_FP
+    test_sorting(numbers, count, NULL);
+#endif
+  #+END_SRC
+
+  Then compiler does not complain at all. Let's run in debugger:
+  #+BEGIN_EXAMPLE
+(lldb) target create "ex18"
+Current executable set to 'ex18' (x86_64).
+(lldb) run 2 5 1
+Process 7101 launched: '===' (x86_64)
+Process 7101 stopped
+,* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+    frame #0: 0x0000000000000000
+error: memory read failed for 0x0
+Target 0: (ex18) stopped.
+  #+END_EXAMPLE
+
+  More helpfully, from AddressSanitizer, we could gather more explicit clue:
+  #+BEGIN_EXAMPLE
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==7097==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x000000000000 bp 0x7ffee29b5e00 sp 0x7ffee29b5d58 T0)
+==7097==Hint: pc points to the zero page.
+==7097==The signal is caused by a READ memory access.
+==7097==Hint: address points to the zero page.
+
+==7097==Register values:
+rax = 0x0000602000000114  rbx = 0x0000000000000000  rcx = 0x0000000000000000  rdx = 0x0000000000000001
+rdi = 0x0000000000000002  rsi = 0x0000000000000005  rbp = 0x00007ffee29b5e00  rsp = 0x00007ffee29b5d58
+ r8 = 0x0000100000000000   r9 = 0x00000fffffffff00  r10 = 0x00007ffee29b6148  r11 = 0x0000000000000020
+r12 = 0x0000000000000000  r13 = 0x0000000000000000  r14 = 0x0000000000000000  r15 = 0x0000000000000000
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV (<unknown module>)
+==7097==ABORTING
+abort trap: 6
+  #+END_EXAMPLE
+
+  That is, our =pc= got set to 0, =NULL=.
++ Write another sorting algorithm, then change =test_sorting= so that it takes
+  /both/ an arbitrary sort function and the sort function's callback comparison.
+  Use it to test both of your algorithms.
+
+  Here we use quick sort algorithm:
+  #+BEGIN_SRC C
+void quick_sort_recur(int *numbers, int count, compare_cb cmp)
+{
+    int temp = 0;
+    int i = 0;
+
+    if (count < 2)
+        return;
+
+    int reference = count / 2;
+
+    temp = numbers[reference];
+    numbers[reference] = numbers[0];
+    numbers[0] = temp;
+
+    int last = 0;
+    for (i = 1; i < count; ++i) {
+        if (cmp(numbers[0], numbers[i]) > 0) {
+            last++;
+            temp = numbers[last];
+            numbers[last] = numbers[i];
+            numbers[i] = temp;
+        }
+    }
+
+    temp = numbers[0];
+    numbers[0] = numbers[last];
+    numbers[last] = temp;
+    quick_sort_recur(numbers, last, cmp);
+    quick_sort_recur(numbers + last + 1, count - last - 1, cmp);
+}
+
+int *quick_sort(int *numbers, int count, compare_cb cmp)
+{
+    int *target = malloc(count * sizeof(int));
+
+    if (!target)
+        die("Memory error.");
+
+    memcpy(target, numbers, count * sizeof(int));
+    quick_sort_recur(target, count, cmp);
+    return target;
+}
+  #+END_SRC
+
+  Then our test function got transformed as
+  #+BEGIN_SRC C
+typedef int *(*sort_cb)(int *numbers, int count, compare_cb cmp);
+
+void test_sorting(int *numbers, int count, sort_cb srt, compare_cb cmp)
+{
+    int i = 0;
+    int *sorted = srt(numbers, count, cmp);
+
+    if (!sorted)
+        die("Failed to sort as requested.");
+
+    for (i = 0; i < count; i++) {
+        printf("%d ", sorted[i]);
+    }
+    printf("\n");
+
+    free(sorted);
+
+#if HACK_FP
+    unsigned char *data = (unsigned char *) cmp;
+    for (i = 0; i < 25; i++) {
+        data[i] = i;
+    }
+    printf("\n");
+#endif
+}
+  #+END_SRC
+
+  Now we got the result from following entry point:
+  #+BEGIN_SRC C
+int main(int argc, char *argv[])
+{
+    if (argc < 2) die("Usage: ex18 4 3 1 5 6");
+
+    int count = argc - 1;
+    int i = 0;
+    char **inputs = argv + 1;
+
+    int *numbers = malloc(count * sizeof(int));
+    if (!numbers) die("Memory error.");
+
+    for (i = 0; i < count; i++) {
+        numbers[i] = atoi(inputs[i]);
+    }
+
+#if HACK_FP
+    test_sorting(numbers, count, NULL);
+#endif
+
+    test_sorting(numbers, count, bubble_sort ,sorted_order);
+    test_sorting(numbers, count, quick_sort, sorted_order);
+    test_sorting(numbers, count, bubble_sort ,reverse_order);
+    test_sorting(numbers, count, quick_sort ,reverse_order);
+    test_sorting(numbers, count, bubble_sort ,strange_order);
+    test_sorting(numbers, count, quick_sort ,strange_order);
+
+    free(numbers);
+
+    return 0;
+}
+  #+END_SRC
+
+  As
+  #+BEGIN_SRC sh :exports both :results verbatim
+./ex18 4 3 1 5 6
+  #+END_SRC
+
+  #+RESULTS:
+  : 1 3 4 5 6
+  : 1 3 4 5 6
+  : 6 5 4 3 1
+  : 6 5 4 3 1
+  : 6 4 5 3 1
+  : 6 5 3 4 1

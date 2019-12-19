@@ -1,0 +1,67 @@
+#+TITLE: Zed's Awesome Debug Macros
+
+* Type the codes
++ [[file:dbg.h::#ifndef __DBG_H_][Debugging macros]]
++ [[file:ex19.c][Explanatory code using dbg.h]]
+
+* Extra Credit
++ Modify the logging so that it includes the function name, as well as the
+  =file:line= (with =-DNDEBUG= flag in compilation).
+
+  #+BEGIN_SRC C
+#ifndef __DBG_H_
+#define __DBG_H_
+
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+
+#ifdef NDEBUG
+#define debug(M, ...)
+#else
+#define debug(M, ...) fprintf(stderr, "DEBUG %s:%s:%d: " M "\n",   \
+                              __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#endif
+
+#define clean_errno() (errno == 0 ? "None" : strerror(errno))
+
+#define log_err(M, ...) fprintf(stderr, "[ERROR] (%s:%s:%d: errno: %s) " M "\n", \
+                                __FILE__, __FUNCTION__, __LINE__, clean_errno(), ##__VA_ARGS__)
+
+#define log_warn(M, ...) fprintf(stderr, "[WARN] (%s:%s:%d: errno: %s) " M "\n", \
+                                __FILE__, __FUNCTION__, __LINE__, clean_errno(), ##__VA_ARGS__)
+
+#define log_info(M, ...) fprintf(stderr, "[INFO] (%s:%s:%d) " M "\n", \
+                                 __FILE__, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+
+#define check(A, M, ...) if (!(A)) {            \
+        log_err(M, ##__VA_ARGS__); errno=0; goto error; }
+
+#define sentinel(M, ...) { log_err(M, ##__VA_ARGS__);   \
+        errno=0; goto error; }
+
+#define check_mem(A) check((A), "Out of memory.")
+
+#define check_debug(A, M, ...) if (!(A)) { debug(M, ##__VA_ARGS__); \
+        errno=0; goto error; }
+
+#endif // __DBG_H_
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+./ex19 test 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  [ERROR] (ex19.c:test_log_err:16: errno: None) I believe everything is broken.
+  [ERROR] (ex19.c:test_log_err:17: errno: None) There are 0 problems in space.
+  [WARN] (ex19.c:test_log_warn:22: errno: None) You can safely ignore this.
+  [WARN] (ex19.c:test_log_warn:23: errno: None) Maybe consider looking at: /etc/passwd.
+  [INFO] (ex19.c:test_log_info:28) Well I did something mundane.
+  [INFO] (ex19.c:test_log_info:29) It happened 1.300000 times today.
+  [ERROR] (ex19.c:test_check:41: errno: No such file or directory) Failed to open test.
+  [INFO] (ex19.c:test_sentinel:60) It worked.
+  [ERROR] (ex19.c:test_sentinel:63: errno: None) I shouldn't run
+  [ERROR] (ex19.c:test_check_mem:78: errno: None) Out of memory.
+  #+end_example
