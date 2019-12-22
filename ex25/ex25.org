@@ -1,0 +1,176 @@
+#+TITLE: Variable Argument Functions
+* Type the [[file:ex25.c::#include <stdlib.h>][code]]
+* How to Break It
++ Try to send the =EOF= signal when it reads a character.
+
+  #+BEGIN_EXAMPLE
+What's your first name? Zed
+What's your initial? 
+[ERROR] (ex25.c:85: errno: None) Input error.
+[ERROR] (ex25.c:109: errno: None) Failed initial.
+  #+END_EXAMPLE
+
+  This attempt couldn't break the program. This program is quite robust.
++ Change the code so that you forget to pass in the initial size for ="%s"=
+  format.
+
+  The change:
+  #+BEGIN_SRC C
+    int rc = read_scan("%s", &first_name);
+  #+END_SRC
+
+  The resulting execution:
+  #+BEGIN_EXAMPLE
+Process 5345 launched: '' (x86_64)
+ex25(5345,0x1000a65c0) malloc: can't allocate region
+,*** mach_vm_map(size=18446744073436917760) failed (error code=3)
+ex25(5345,0x1000a65c0) malloc: *** set a breakpoint in malloc_error_break to debug
+Process 5345 stopped
+,* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x0)
+    frame #0: 0x0000000100000f6b ex25`read_string(out_string=0x0000000000000000, max_buffer=-272634328) at ex25.c:10:17
+   7
+   8   	int read_string(char **out_string, int max_buffer)
+   9   	{
+-> 10  	    *out_string = calloc(1, max_buffer + 1);
+    	                ^
+   11  	    check_mem(*out_string);
+   12
+   13  	    char *result = fgets(*out_string, max_buffer, stdin);
+Target 0: (ex25) stopped.
+  #+END_EXAMPLE
++ Try giving it more data than =MAX_DATA=, and then see how omitting =calloc= in
+  =read_string= changes how it works.
+
+  After adjusting =MAX_DATA= as 10, the =malloc= version's behavior:
+  #+BEGIN_EXAMPLE
+What's your first name? 012345678901234
+What's your initial? What's your last name? How old are you? 40
+---- RESULTS ----
+First Name: 012345678Initial: 9
+Last Name: 1234
+Age: 40
+  #+END_EXAMPLE
+
+  =Calloc= version's behavior:
+  #+BEGIN_EXAMPLE
+What's your first name? 0123456789012345
+What's your initial? What's your last name? How old are you? 40
+---- RESULTS ----
+First Name: 012345678Initial: 9
+Last Name: 12345
+Age: 40
+  #+END_EXAMPLE
+
+  I couldn't find any difference from those.
+* Extra Credit
++ Write a similar function to =printf= that uses the varages system, and rewrite
+  =main= to use it.
+
+  #+BEGIN_SRC C
+int write_string(char *in_string)
+{
+    int i = 0;
+    for (i = 0; in_string[i] != '\0'; ++i) {
+        fputc(in_string[i], stdout);
+        check(!ferror(stdout), "Output error.");
+    }
+    return i;
+
+error:
+    return -1;
+}
+
+int _write_int(char *intInString, int cur, int max_buffer, int src)
+{
+    check_debug(src, "Source integer hit 0");
+
+    cur = _write_int(intInString, cur, max_buffer, src / 10);
+
+    check_debug(cur <= max_buffer, "Unable to convert %d", src);
+
+    intInString[cur++] = src % 10 + '0';
+
+    return cur;
+
+error:
+    return cur;
+}
+
+int write_int(int in_int)
+{
+    char intInString[100] = { '\0' };
+    int i = 0;
+
+    if (in_int < 0)
+    {
+        intInString[i++] = '-';
+        in_int = - in_int;
+    }
+
+    i = _write_int(intInString, i, 99, in_int / 10);
+    check(i < 99, "Given integer to big to print.");
+
+    intInString[i++] = in_int % 10 + '0';
+    intInString[i] = '\0';
+
+    return write_string(intInString);
+
+error:
+    return -1;
+}
+
+int write_print(const char *fmt, ...)
+{
+    int i = 0;
+    int rc = 0;
+    int in_int = 0;
+    char in_char = ' ';
+    char *in_string = NULL;
+
+    va_list argp;
+    va_start(argp, fmt);
+
+    for (i = 0; fmt[i] != '\0'; i++) {
+        if (fmt[i] == '%') {
+            i++;
+            switch (fmt[i]) {
+                case '\0':
+                    sentinel("Invalid format, you ended with %%.");
+                    break;
+
+                case 'd':
+                    in_int = va_arg(argp, int);
+                    rc = write_int(in_int);
+                    check(rc >= 0, "Failed to write int.");
+                    break;
+
+                case 'c':
+                    in_char = va_arg(argp, int);
+                    fputc(in_char, stdout);
+                    break;
+
+                case 's':
+                    in_string = va_arg(argp, char *);
+                    rc = write_string(in_string);
+                    check(rc >= 0, "Failed to write string.");
+                    break;
+
+                default:
+                    sentinel("Invalid format.");
+
+            }
+        } else {
+            fputc(fmt[i], stdout);
+        }
+
+        check(!ferror(stdout), "Output error.");
+    }
+
+    va_end(argp);
+    return 0;
+
+error:
+    va_end(argp);
+    return -1;
+}
+  #+END_SRC
