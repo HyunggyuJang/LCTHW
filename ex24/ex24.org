@@ -1,0 +1,309 @@
+#+TITLE: Input, Output, Files
+* How to Break It
++ Use =fscanf= instead =fgets=.
+ 
+  #+BEGIN_SRC C
+    printf("What's your First Name? ");
+    rc = fscanf(stdin, "%50s", you.first_name);
+    check(rc > 0, "Failed to read first name.");
+  #+END_SRC
+
+  It makes following response:
+  #+BEGIN_EXAMPLE
+./ex24
+What's your First Name? Zed
+What's your Last Name? How old are you? 37
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 1
+How much do you make an hour? 1
+----- RESULTS -----
+First Name: ZedLast Name:
+Age: 37
+Eyes: Blue
+Income: 1.000000
+  #+END_EXAMPLE
+
+  This is due to the behavior of =scanf=; it do not consume the white spaces and
+  the unconsumed white spaces consumed by following =fgets=:
+  #+BEGIN_EXAMPLE
+What's your First Name? Zed 	Shaw
+What's your Last Name? How old are you? 37
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 1
+How much do you make an hour? 284
+----- RESULTS -----
+First Name: ZedLast Name:  	Shaw
+Age: 37
+Eyes: Blue
+Income: 284.000000
+  #+END_EXAMPLE
+
+  Then let's try to make the subsequent =fgets= to be =fscanf= in consistent
+  manner:
+  #+BEGIN_SRC C
+    printf("What's your Last Name? ");
+    rc = fscanf(stdin, "%50s", you.last_name);
+    check(rc > 0, "Failed to read last name.");
+  #+END_SRC
+
+  #+BEGIN_EXAMPLE
+What's your First Name? Zed
+What's your Last Name? Shaw
+How old are you? 37
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 1
+How much do you make an hour? 1
+----- RESULTS -----
+First Name: ZedLast Name: ShawAge: 37
+Eyes: Blue
+Income: 1.000000
+  #+END_EXAMPLE
++ Use =gets= instead of =fgets=.
+
+  The non-destructive execution case:
+  #+BEGIN_EXAMPLE
+./ex24
+warning: this program uses gets(), which is unsafe.
+What's your First Name? Hyunggyu
+What's your Last Name? Jang
+How old are you? 23
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 4
+How much do you make an hour? 100000000
+----- RESULTS -----
+First Name: HyunggyuLast Name: JangAge: 23
+Eyes: Black
+Income: 100000000.000000
+  #+END_EXAMPLE
+
+  The destructive execution case:
+  #+BEGIN_EXAMPLE
+lldb ex24
+(lldb) target create "ex24"
+Current executable set to 'ex24' (x86_64).
+(lldb) run
+Process 4328 launched: '' (x86_64)
+warning: this program uses gets(), which is unsafe.
+What's your First Name? 11111111111111111111111
+11111111111111111111111
+What's your Last Name? 22222222222222222222
+22222222222222222222
+How old are you? 333
+333
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 4
+4
+How much do you make an hour? 5555555555555555
+5555555555555555
+----- RESULTS -----
+First Name: 11111111112222222222Last Name: 2222222222Age: 333
+Eyes: Black
+Income: 5555555766632448.000000
+Process 4328 stopped
+,* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGABRT
+    frame #0: 0x00007fff608912c6 libsystem_kernel.dylib`__pthread_kill + 10
+libsystem_kernel.dylib`__pthread_kill:
+->  0x7fff608912c6 <+10>: jae    0x7fff608912d0            ; <+20>
+    0x7fff608912c8 <+12>: movq   %rax, %rdi
+    0x7fff608912cb <+15>: jmp    0x7fff6088b457            ; cerror_nocancel
+    0x7fff608912d0 <+20>: retq
+Target 0: (ex24) stopped.
+  #+END_EXAMPLE
+
+  To illustrate this malfunction, I've adjusted the =MAX_DATA= from 100 to 10.
++ Take the input for =you.eyes= and remove the check that the number is within
+  the right range.
+
+  #+BEGIN_EXAMPLE
+lldb ex24
+(lldb) target create "ex24"
+Current executable set to 'ex24' (x86_64).
+(lldb) run
+Process 4363 launched: '' (x86_64)
+What's your First Name? Zed
+Zed
+What's your Last Name? Shaw
+Shaw
+How old are you? 37
+37
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 0
+0
+How much do you make an hour? 1
+1
+----- RESULTS -----
+First Name: Zed
+Last Name: Shaw
+Age: 37
+Process 4363 stopped
+,* thread #1, queue = 'com.apple.main-thread', stop reason = EXC_BAD_ACCESS (code=1, address=0x900001068)
+    frame #0: 0x0000000100000cb5 ex24`main(argc=1, argv=0x00007ffeefbfee68) at ex24.c:65:26
+   62  	    printf("First Name: %s", you.first_name);
+   63  	    printf("Last Name: %s", you.last_name);
+   64  	    printf("Age: %d\n", you.age);
+-> 65  	    printf("Eyes: %s\n", EYE_COLOR_NAMES[you.eyes]);
+    	                         ^
+   66  	    printf("Income: %f\n", you.income);
+   67
+   68  	    return 0;
+Target 0: (ex24) stopped.
+  #+END_EXAMPLE
+* The I/O Functions
+Here we see the man pages for the file functions.
+
+The new functions that I've never seen before are followings:
++ =fgetpos= :: It behaves as same as =ftell= except it uses opaque type =fpos_t=
+  rather than =long=
+* Extra Credit
++ Rewrite this to not use =fscanf= at all.
+
+  Here is the helper function:
+  #+BEGIN_SRC C
+int fgetInt(int *dst, int max_data, FILE *src)
+{
+    char *intInString = malloc(max_data + 1);
+
+    check_mem(intInString);
+    check(fgets(intInString, MAX_DATA - 1, src), "Failed to read integer.");
+    check(isdigit(intInString[0]), "Non-integer value is entered.");
+    ,*dst = atoi(intInString);
+
+    free(intInString);
+    return 0;
+error:
+    if (intInString)
+        free(intInString);
+    return -1;
+}
+
+int fgetFloat(float *dst, int max_data, FILE *src)
+{
+    char *floatInString = malloc(max_data + 1);
+
+    check_mem(floatInString);
+    check(fgets(floatInString, MAX_DATA - 1, src), "Failed to read float.");
+    check(isdigit(floatInString[0]) || floatInString[0] == '.',
+          "Non-floating number value is entered.");
+    *dst = atof(floatInString);
+
+    free(floatInString);
+    return 0;
+error:
+    if (floatInString)
+        free(floatInString);
+    return -1;
+}
+  #+END_SRC
+
+  And it works as expected:
+  #+BEGIN_EXAMPLE
+What's your First Name? Zed
+What's your Last Name? Shaw
+How old are you? 40
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 1
+How much do you make an hour? 1
+----- RESULTS -----
+First Name: Zed
+Last Name: Shaw
+Age: 40
+Eyes: Blue
+Income: 1.000000
+  #+END_EXAMPLE
+
++ Fix it so that their input names get stripped of the trailing newline
+  characters and any white space.
+
+  Here is the function trimming the white spaces from the string:
+  #+BEGIN_SRC C
+void stripTrailingWhites(char *src)
+{
+    int len = strlen(src);
+    int i = 0;
+
+    for (i = len - 1; i >= 0 && isspace(src[i]); --i)
+        src[i] = '\0';
+}
+  #+END_SRC
+
+  Then here is the results:
+  #+BEGIN_EXAMPLE
+What's your First Name? sdf  sdf                                    
+What's your Last Name? sdfdf 					                
+How old are you? 1
+What color are your eyes:
+1) Blue
+2) Green
+3) Brown
+4) Black
+5) Other
+> 1
+How much do you make an hour? 1
+----- RESULTS -----
+First Name: sdf  sdf
+Last Name: sdfdf
+Age: 1
+Eyes: Blue
+Income: 1.000000
+  #+END_EXAMPLE
++ Use =scanf= to write a function that reads one character at a time and fills
+  in the names but doesn't go past the end.
+
+  #+BEGIN_SRC C
+int fGets(char *to, int max_data, FILE *src)
+{
+    int count = 0;
+    char readChar = 0;
+    int rc = 0;
+    while(count < max_data - 1) {
+        rc = fscanf(src, "%c", &readChar);
+        check(rc > 0, "Failed to read character.");
+
+        if (readChar == '\n') break;
+
+        to[count++] = readChar;
+    }
+
+    to[count] = '\0';
+
+    return count;
+
+error:
+    return -1;
+}
+  #+END_SRC

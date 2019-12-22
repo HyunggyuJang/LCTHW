@@ -1,0 +1,258 @@
+#+TITLE: Meet Duff's Device
+* Extra Credit
++ Spot the error in the current version of implementation.
+
+  It just got broken down when we try to set =count= as 0. I've reason through
+  this but I could verify this fact by
+  #+BEGIN_SRC C
+    // Error version -- those newly created device do not handle count = 0
+    // case properly.
+    rc = duffs_device(from, to, 0);
+    check(rc == 0, "Duff's device expected to write 0 but %d", rc);
+    check(valid_copy(to, 1003, 'y'), "Duff's device failed to copy nothing.");
+  #+END_SRC
+
+  Then we got
+  #+BEGIN_SRC sh :exports both
+./ex23 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+[ERROR] (ex23.c:87: errno: None) [0] x != y
+[ERROR] (ex23.c:135: errno: None) Duff's device failed to copy nothing.
+  #+END_EXAMPLE
++ Create a set of macros that lets you create any length of device like this.
+  For example, what if you wanted to have 32 case statements and didn't want to
+  write out all of them? Can you do a macro that lays down eight at a time?
+
+  What we want to do is to wrap around the inner part of do while statement --
+  the bunch of =case= statements. So our start point would be
+  #+BEGIN_SRC C
+int duffs_device(char *from, char *to, int count)
+{
+    {
+        int n = (count + 7) / 8;
+        switch (count % 8) {
+            case 0:
+                do {
+                    *to++ = *from++;
+                    LAYS_7();
+                } while (--n > 0);
+        }
+    }
+
+    return count;
+}
+  #+END_SRC
+
+  And
+  #+BEGIN_SRC C
+#define LAYS_7()                                \
+    case 7: *to++ = *from++;                    \
+    case 6: *to++ = *from++;                    \
+    case 5: *to++ = *from++;                    \
+    case 4: *to++ = *from++;                    \
+    case 3: *to++ = *from++;                    \
+    case 2: *to++ = *from++;                    \
+    case 1: *to++ = *from++;
+  #+END_SRC
+
+  Then now we want to write this device of 32 case statements version:
+  #+BEGIN_SRC C
+int duffs_device(char *from, char *to, int count)
+{
+    {
+        int n = (count + 31) / 32;
+        switch (count % 32) {
+            case 0:
+                do {
+                    *to++ = *from++;
+                    LAYS_8_OFFSET(3);
+                    LAYS_8_OFFSET(2);
+                    LAYS_8_OFFSET(1);
+                    LAYS_7();
+                } while (--n > 0);
+        }
+    }
+
+    return count;
+}
+  #+END_SRC
+
+  The behavior of =LAYS_8_OFFSET(offset)= we want to have is straightforward. We
+  want to replace the intermediate codes from above implementation. Since we
+  chunked down every 8 entities, what we want to generate is
+  #+BEGIN_SRC C
+#define LAYS_8_OFFSET(offset)                   \
+    case (8 * offset + 7): *to++ = *from++;     \
+    case (8 * offset + 6): *to++ = *from++;     \
+    case (8 * offset + 5): *to++ = *from++;     \
+    case (8 * offset + 4): *to++ = *from++;     \
+    case (8 * offset + 3): *to++ = *from++;     \
+    case (8 * offset + 2): *to++ = *from++;     \
+    case (8 * offset + 1): *to++ = *from++;     \
+    case (8 * offset): *to++ = *from++;
+  #+END_SRC
+
+  In principle, these are all we need to implement. But since we smelled the
+  duplicate pattern, let's wrap up this with refactoring.
+
+  First phase:
+  #+BEGIN_SRC C
+#define LAYS_8_OFFSET(offset)                   \
+    LAYS_7_OFFSET(offset)                       \
+    case (8 * offset): *to++ = *from++;
+
+#define LAYS_7() LAYS_7_OFFSET(0)
+
+#define LAYS_7_OFFSET(offset)                   \
+    case (8 * offset + 7): *to++ = *from++;     \
+    case (8 * offset + 6): *to++ = *from++;     \
+    case (8 * offset + 5): *to++ = *from++;     \
+    case (8 * offset + 4): *to++ = *from++;     \
+    case (8 * offset + 3): *to++ = *from++;     \
+    case (8 * offset + 2): *to++ = *from++;     \
+    case (8 * offset + 1): *to++ = *from++;
+  #+END_SRC
+
+  Then hide the details:
+  #+BEGIN_SRC C
+#define LAYS_8_OFFSET(offset)                   \
+    LAYS_7_OFFSET(offset)                       \
+        DUFFS_LAYOUT(offset, 0)
+
+#define LAYS_7() LAYS_7_OFFSET(0)
+
+#define LAYS_7_OFFSET(offset)                   \
+    DUFFS_LAYOUT(offset, 7)                     \
+        DUFFS_LAYOUT(offset, 6)                 \
+        DUFFS_LAYOUT(offset, 5)                 \
+        DUFFS_LAYOUT(offset, 4)                 \
+        DUFFS_LAYOUT(offset, 3)                 \
+        DUFFS_LAYOUT(offset, 2)                 \
+        DUFFS_LAYOUT(offset, 1)
+
+#define DUFFS_LAYOUT(offset, remainder)         \
+    case (8 * offset + remainder): *to++ = *from++;
+  #+END_SRC
++ Change the =main= to conduct some speed tests to see which one is really the
+  fastest.
+
+  #+BEGIN_SRC C
+#define DATA_SIZE 1000000
+
+double get_tick()
+{
+    struct timespec t;
+    clock_gettime(CLOCK_REALTIME, &t);
+    return t.tv_sec + t.tv_nsec * 1e-9;
+}
+
+,*** in main
+    // use normal copy to
+    // mesasure execution time
+    tick = - get_tick();
+    rc = normal_copy(from, to, DATA_SIZE);
+    tick += get_tick();
+    log_info("nomal copy took %.6f time", tick);
+    check(rc == DATA_SIZE, "Normal copy failed: %d", rc);
+    check(valid_copy(to, DATA_SIZE, 'x'), "Normal copy failed.");
+
+    // duffs version
+    // measure execution time
+    tick = - get_tick();
+    rc = duffs_device(from, to, DATA_SIZE);
+    tick += get_tick();
+    log_info("Duff's device took %.6f time", tick);
+    check(rc == DATA_SIZE, "Duff's device failed: %d", rc);
+    check(valid_copy(to, DATA_SIZE, 'x'), "Duff's device failed copy.");
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+./ex23 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  : [INFO] (ex23.c:123) nomal copy took 0.002606 time
+  : [INFO] (ex23.c:135) Duff's device took 0.002377 time
++ Read about =memcpy=, =memmove=, and =memset=, and also compare their speed.
+
+  From man page, the difference =memmove= from =memcpy= is that the former one
+  do not destructive copy; for the latter, if the two string got overlapped then
+  the behavior is /undefined/ -- /UB!/
+
+  Let's try to digest these difference.
+  #+BEGIN_SRC C :includes <memory.h> <stdio.h> :exports both :results verbatim
+char stringSource[20] = "1234567890";
+char *dst = stringSource + 4;
+char *src = stringSource;
+printf("Before memmove\nDestination: %s\nSource: %s\n", dst, src);
+memmove(dst, src, 10);
+printf("After memmove\nDestination: %s\nSource: %s\n", dst, src);
+  #+END_SRC
+
+  #+RESULTS:
+  : Before memmove
+  : Destination: 567890
+  : Source: 1234567890
+  : After memmove
+  : Destination: 1234567890
+  : Source: 12341234567890
+
+  Whereas
+  #+BEGIN_SRC C :includes <memory.h> <stdio.h> :exports both :results verbatim
+char stringSource[20] = "1234567890";
+char *dst = stringSource + 4;
+char *src = stringSource;
+printf("Before memcpy\nDestination: %s\nSource: %s\n", dst, src);
+memcpy(dst, src, 10);
+printf("After memcpy\nDestination: %s\nSource: %s\n", dst, src);
+  #+END_SRC
+
+  #+RESULTS:
+  : Before memcpy
+  : Destination: 567890
+  : Source: 1234567890
+  : After memcpy
+  : Destination: 1234567890
+  : Source: 12341234567890
+
+  Consequently the behavior of two function is same in this example. We came to
+  understand the non-destructive implementation means during execution, =src= do
+  not altered as if it got snapshot at the calling time.
+
+  Now we inspect the execution time of those:
+  #+BEGIN_SRC C
+    // setup the from to have some stuff
+    // measure the execution time of memset
+    tick = - get_tick();
+    memset(from, 'x', DATA_SIZE);
+    tick += get_tick();
+    log_info("memset took %.6f time", tick);
+
+    // measure execution time of memcpy
+    tick = - get_tick();
+    memcpy(to, from, DATA_SIZE);
+    tick += get_tick();
+    log_info("memcpy took %.6f time", tick);
+
+    // measure execution time of memmove
+    tick = - get_tick();
+    memmove(to, from, DATA_SIZE);
+    tick += get_tick();
+    log_info("memmove took %.6f time", tick);
+  #+END_SRC
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+./ex23 2>&1
+  #+END_SRC
+
+  #+RESULTS:
+  : [INFO] (ex23.c:117) memset took 0.000062 time
+  : [INFO] (ex23.c:127) nomal copy took 0.002606 time
+  : [INFO] (ex23.c:135) memcpy took 0.000080 time
+  : [INFO] (ex23.c:145) Duff's device took 0.002370 time
+  : [INFO] (ex23.c:153) memmove took 0.000079 time
+
+  We can guess that =memmove= and =memcpy= are actually same procedure.
