@@ -1,0 +1,218 @@
+#+TITLE: Project logfind
+
+* Specification
+** Usage
+*** Simple Use Cases
+It is like =grep=, one of Unix command line tools, but in a more restricted way:
+If we want to find /zedshaw/ in the specificed /log/ file locations (which can
+be configured via =~/.logfind= file, see [[*Configuration][Configuration]]), do
+#+BEGIN_SRC sh
+logfind zedshaw
+#+END_SRC
+
+Then it will list all of the /log/ files that contains =zedshaw= word in it.
+
+If you give more than one argument to find, =logfind= interpret each argument
+combined as /and/. That is, if you specifies as
+#+BEGIN_SRC sh
+logfind zedshaw smart guy
+#+END_SRC
+
+Then it will list all the /log/ files that contains =zedshaw= /and/ =smart=
+/and/ =guy=.
+
+*** Optional Arguments
+You can modify this default behavior by option, =-o=, which makes =logfind= to
+think the given arguments should be combined with /or/ instead of /and/.
+
+*** Configuration
+=Logfind= finds the files specified in =~/.logfind=. It allows the usual file
+path format like
+#+BEGIN_EXAMPLE
+~/zedshaws_prog/log/recent.log
+~/Documents/log/experiment.log
+#+END_EXAMPLE
+
+Or it allows the =glob='s format:
+#+BEGIN_EXAMPLE
+~/tests/log/*
+#+END_EXAMPLE
+
+* Implementation Notes
+** Sketch of Ideas
+In a nutshell, all we need to do is to find out whether given string is within
+given file. If we allowed to use that program, then the left is parse through
+each file of specified file list using the program that I've prescribed.
+
+The first program can be reduced further via following observation: Using
+=fgets=, get string chunk from the specificed file; then what we need to do is
+parse through each line via =strstr= to find out whether it contains given
+string.
+
+*** First version of =logfind=
+[[file:logfind_1/logfind.c::#include <stdio.h>][Here]] is the implementation.
+
+And the test files:
+#+BEGIN_SRC sh :exports both :results verbatim
+cat logfind_1/1.log
+echo "----"
+cat logfind_1/2.log
+echo "----"
+cat logfind_1/3.log
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+TEST
+Function
+Nothing
+----
+Zed
+A
+Shaw
+----
+TEST
+40
+LCTHW
+#+end_example
+
+And here is the test:
+#+BEGIN_SRC sh :exports both :results verbatim
+cd logfind_1
+./logfind TEST
+echo "----"
+./logfind DoNotAppear
+echo "----"
+./logfind Shaw
+echo "----"
+./logfind Nothing
+#+END_SRC
+
+#+RESULTS:
+: 1.log
+: 3.log
+: ----
+: ----
+: 2.log
+: ----
+: 1.log
+*** Second version of =logfind=
+Let's make progression to our crude =logfind= to encompass multiple words to
+find. We are going to implement search method which will find all multiple words
+at the same time; this is the fastest search method.
+
+Here is the [[file:logfind_2/logfind.c::#include <stdio.h>][implementation]] and test:
+
+#+BEGIN_EXAMPLE
+./logfind TEST
+1.log
+3.log
+
+./logfind TEST 40
+3.log
+
+./logfind TEST Nothing
+1.log
+#+END_EXAMPLE
+*** Third version of =logfind=
+Now we tackle with the option part. As usual, here is the [[file:logfind_3/logfind.c::#include <stdio.h>][source code]]. We used
+function pointer to set the =findMethod= to be used in =findWordsFromFile=.
+Now test:
+#+BEGIN_SRC sh :exports both :results verbatim
+cd logfind_3
+echo "----"
+./logfind Zed Function LCTHW
+echo "----"
+./logfind -o Zed Function LCTHW
+#+END_SRC
+
+#+RESULTS:
+: ----
+: ----
+: 1.log
+: 2.log
+: 3.log
+*** Fourth version of =logfind=
+Now we try to tackle with configuration file. First let's make configuration
+file, =.logfind=, as follows:
+#+BEGIN_SRC sh :exports both :results verbatim
+cat logfind_4/.logfind
+#+END_SRC
+
+#+RESULTS:
+: 1.log
+: 2.log
+: 3.log
+
+And the [[file:logfind_4/logfind.c::#include <stdio.h>][source file]]. Here for simplicity, we relied the automatic variable to
+store the parsed log files from configuration file:
+#+BEGIN_SRC C
+int parseConfigurationFile(char logFiles[][MAX_DATA])
+{
+    int nlogs = 0;
+    FILE *fileList = fopen(".logfind", "r");
+    check(fileList, "Unable to open configuration file");
+
+    for (nlogs = 0; fGets(logFiles[nlogs], MAX_DATA, fileList) > 0; ++nlogs) {
+        check(!ferror(fileList),
+              "Error occured during parsing configuration file.");
+        debug("Currently parsed name is %s", logFiles[nlogs]);
+    }
+
+    fclose(fileList);
+    return nlogs;
+error:
+    if (fileList) fclose(fileList);
+    return -1;
+}
+
+int main(int argc, char *argv[])
+{
+    char logFiles[MAX_DATA][MAX_DATA] = { { '\0' } };
+    int nlogs = parseConfigurationFile(logFiles);
+    check(nlogs >= 0, "Unable to process configuration file.");
+    ...
+}
+#+END_SRC
+
+And to deal with the trailing newline character problem in =fgets=, we rented
+the function of previous exercise:
+#+BEGIN_SRC C
+int fGets(char *to, int max_data, FILE *src)
+{
+    int count = 0;
+    char readChar = 0;
+    int rc = 0;
+    while(count < max_data - 1) {
+        rc = fscanf(src, "%c", &readChar);
+        check_debug(rc > 0, "Hit end of file.");
+
+        if (readChar == '\n') break;
+
+        to[count++] = readChar;
+    }
+
+    to[count] = '\0';
+
+    return count;
+
+error:
+    if (ferror(src)) {
+        log_err("Error occured during reading.");
+        return -1;
+    }
+
+    return 0;
+}
+#+END_SRC
+
+Then test:
+#+BEGIN_SRC sh :exports both :results verbatim
+cd logfind_4
+./logfind -o Zed Nothing LCTHW
+#+END_SRC
+
+#+RESULTS:
+: 1.log
+: 2.log
+: 3.log
