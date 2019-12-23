@@ -1,10 +1,12 @@
+#define NDEBUG
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <glob.h>
 #include "dbg.h"
 #define MAX_DATA 100
 
-int fGets(char *to, int max_data, FILE *src)
+char *fGets(char *to, int max_data, FILE *src)
 {
     int count = 0;
     int rc = 0;
@@ -19,15 +21,15 @@ int fGets(char *to, int max_data, FILE *src)
 
     to[count] = '\0';
 
-    return count;
+    return to;
 
 error:
     if (ferror(src)) {
         log_err("Error occured during reading.");
-        return -1;
+        return NULL;
     }
 
-    return 0;
+    return NULL;
 }
 
 int isAllCheckedOff(char **wordsToCheck, int numberOfWords)
@@ -82,7 +84,7 @@ int findWordsFromFile(char **wordsToFind, int numberOfWords, const char *fileNam
     for (i = 0; i < numberOfWords; i++)
         wordsToCheck[i] = wordsToFind[i];
 
-    while (fGets(currentLine, MAX_DATA - 1, sourceFile) > 0 &&
+    while (fGets(currentLine, MAX_DATA - 1, sourceFile) != NULL &&
            !(allFound = findMethod(wordsToCheck, numberOfWords, currentLine)))
         ;
 
@@ -97,20 +99,32 @@ error:
     return -1;
 }
 
-int parseConfigurationFile(char logFiles[][MAX_DATA])
+int parseConfigurationFile(glob_t *pglob)
 {
-    int nlogs = 0;
+    char line[MAX_DATA] = { '\0' };
     FILE *fileList = fopen(".logfind", "r");
+    int glob_flags = GLOB_TILDE;
+    int rc = -1;
+
     check(fileList, "Unable to open configuration file");
 
-    for (nlogs = 0; fGets(logFiles[nlogs], MAX_DATA, fileList) > 0; ++nlogs) {
-        check(!ferror(fileList),
-              "Error occured during parsing configuration file.");
-        debug("Currently parsed name is %s", logFiles[nlogs]);
+    while (fGets(line, MAX_DATA - 1, fileList) != NULL) {
+        rc = glob(line, glob_flags, NULL, pglob);
+        check(rc == 0, "Failed to glob.");
+
+        glob_flags |= GLOB_APPEND;
+        debug("Currently parsed name is %s", line);
     }
 
+    check(!ferror(fileList),
+          "Error occured during parsing configuration file.");
     fclose(fileList);
-    return nlogs;
+
+    for (int i = 0; i < pglob->gl_pathc; ++i) {
+        debug("Glob matched file name: %s", pglob->gl_pathv[i]);
+    }
+
+    return 0;
 error:
     if (fileList) fclose(fileList);
     return -1;
@@ -118,18 +132,20 @@ error:
 
 int main(int argc, char *argv[])
 {
-    char logFiles[MAX_DATA][MAX_DATA] = { { '\0' } };
-    int nlogs = parseConfigurationFile(logFiles);
-    check(nlogs >= 0, "Unable to process configuration file.");
 
     int i = 0;
-    int rc = 0;
+    int rc = -1;
     int isOr = 0;
+    char **wordsToFind = NULL;
+    glob_t logFiles;
+    check(argc > 1, "You need to specify the words to find with.");
 
-    char **wordsToFind = calloc(argc - 1, sizeof (char *));
+    wordsToFind = calloc(argc - 1, sizeof (char *));
     int nWords = 0;
 
-    check(argc > 1, "You need to specify the words to find with.");
+
+    rc = parseConfigurationFile(&logFiles);
+    check(rc == 0, "Failed to parse configuration file.");
 
     for (i = 1; i < argc; ++i) {
         if (argv[i][0] != '-') {
@@ -142,14 +158,19 @@ int main(int argc, char *argv[])
 
     findMethod = isOr ? findWithOr : findWithAnd;
 
-    for (i = 0; i < nlogs; ++i) {
-        rc = findWordsFromFile(wordsToFind, nWords, logFiles[i]);
-        check(rc != -1, "Error occured during searching %s", logFiles[i]);
+    for (i = 0; i < logFiles.gl_pathc; ++i) {
+        rc = findWordsFromFile(wordsToFind, nWords, logFiles.gl_pathv[i]);
+        check(rc != -1, "Error occured during searching %s", logFiles.gl_pathv[i]);
         if (rc)
-            printf("%s\n", logFiles[i]);
+            printf("%s\n", logFiles.gl_pathv[i]);
     }
+
+    free(wordsToFind);
+    globfree(&logFiles);
     return 0;
 
 error:
+    if (wordsToFind) free(wordsToFind);
+    globfree(&logFiles);
     return -1;
 }

@@ -216,3 +216,67 @@ cd logfind_4
 : 1.log
 : 2.log
 : 3.log
+*** Fifth version of =logfind=
+In [[file:logfind_5/logfind.c::#define NDEBUG][this version]] we attempt to complete the specification of =logfind= by
+supporting =glob='s feature.
+
+Here is test:
+#+BEGIN_SRC sh :exports both :results verbatim
+cd logfind_5
+cat .logfind
+#+END_SRC
+
+#+RESULTS:
+: *.log
+: *.c
+: *.h
+
+#+BEGIN_SRC sh :exports both :results verbatim
+cd logfind_5
+./logfind check char
+echo "----"
+./logfind TEST
+echo "----"
+./logfind -o check char
+#+END_SRC
+
+#+RESULTS:
+: logfind.c
+: ----
+: 1.log
+: 3.log
+: ----
+: logfind.c
+: dbg.h
+
+In this version, we found the bug sneaked in previous =fGets=: Since it return 0
+when the read line only has newline character, the user of =fGets= terminate to
+use =fGets= since it consider the return value as sign of =EOF=. So for now,
+we've adjusted the signature of =fGets= to be compatible with =fgets=:
+#+BEGIN_SRC C
+char *fGets(char *to, int max_data, FILE *src)
+{
+    int count = 0;
+    int rc = 0;
+    while(count < max_data - 1) {
+        rc = getc(src);
+        check_debug(rc != EOF, "Hit end of file.");
+
+        if (rc == '\n') break;
+
+        to[count++] = rc;
+    }
+
+    to[count] = '\0';
+
+    return to;
+
+error:
+    if (ferror(src)) {
+        log_err("Error occured during reading.");
+        return NULL;
+    }
+
+    return NULL;
+}
+#+END_SRC
