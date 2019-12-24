@@ -3,13 +3,12 @@ name: C/C++ CI
 on: [push]
 
 jobs:
-  test:
+  build:
 
     runs-on: macos-latest
     
     steps:
     - uses: actions/checkout@v1
     - name: ex29
-      run: make -f ./ex29/Makefile tests
-    - name: ex29 check
-      run: make -f ./ex29/Makefile check
+      run: make
+      working-directory: ex29
