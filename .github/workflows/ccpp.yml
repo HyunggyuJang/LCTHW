@@ -9,6 +9,9 @@ jobs:
     
     steps:
     - uses: actions/checkout@v1
-    - name: ex29
+    - name: clean
+      run: make clean
+      working-directory: ex29
+    - name: make
       run: make
       working-directory: ex29
