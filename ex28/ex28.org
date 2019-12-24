@@ -1,0 +1,274 @@
+#+TITLE: Intermediate Makefiles
+* Type the code
+** Type [[file:c-skeleton/Makefile::CFLAGS=-g -O2 -Wall -Isrc -rdynamic -DNDEBUG $(OPTFLAGS)][Makefile]]
+** Type the Shell [[file:c-skeleton/tests/runtests.sh::#!/usr/bin/env bash][Script]]
+* Try to Understand
+** Understand Makefile
+#+BEGIN_SRC sh
+cd c-skeleton
+# WARNING! Just a demonstration, won't really work right now.
+# this installs the library into /tmp
+make PREFIX=/tmp install
+# this tells it to add pthreads
+make OPTFLAGS=-pthread
+#+END_SRC
+
+#+RESULTS:
+* Extra Credit
++ Try to get the =Makefile= to actually work by putting a source and header file
+  in =src/= and making the library.
+
+  Here is the minimum source file to test most of the feature of our
+  =Makefile=.
+  #+BEGIN_SRC C
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+int print_string(char *source)
+{
+    char *temp = malloc(strlen(source) + 1);
+    strcpy(temp, source); // Use bad functions on purpose
+    while (*temp)
+        fputc(*temp++, stdout);
+    /* Cause memory leaks on purpose */
+    return 0;
+}
+  #+END_SRC
+
+  Then the test file:
+  #+BEGIN_SRC C
+extern int print_string(char *source);
+
+void test_dummy()
+{
+    print_string("Dummy!\n");
+}
+
+int main()
+{
+    test_dummy();
+    return 0;
+}
+  #+END_SRC
+
+  Now let's run the =Makefile=:
+  #+BEGIN_SRC sh :exports both :results verbatim
+cd c-skeleton
+make
+  #+END_SRC
+
+  #+RESULTS:
+  #+BEGIN_EXAMPLE
+sh ./tests/runtests.sh
+Running unit tests:
+./tests/runtests.sh: line 5:  9079 Abort trap: 6           $VALGRIND ./$i 2>> tests/tests.log
+ERROR in test tests/print_string_tests: here's tests/tests.log
+------
+
+=================================================================
+==8604==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 7 byte(s) in 1 object(s) allocated from:
+    #0 0x1100863ed in wrap_malloc (libclang_rt.asan_osx_dynamic.dylib:x86_64h+0x453ed)
+    #1 0x10f2e2dd7 in print_string libex28.c:7
+    #2 0x10f2e2e4f in main print_string_tests.c:10
+    #3 0x7fff750483d4 in start (libdyld.dylib:x86_64+0x163d4)
+
+make: *** [tests] Error 1
+  #+END_EXAMPLE
+
+  Then let's try to fix it!
+  #+BEGIN_SRC sh :exports both :results verbatim
+cat c-skeleton/src/libex28.c
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  #include <string.h>
+  #include <stdlib.h>
+  #include <stdio.h>
+
+  int print_string(char *source)
+  {
+      char *temp = malloc(strlen(source) + 1);
+      strcpy(temp, source); // Use bad functions on purpose
+      while (*temp)
+          fputc(*temp++, stdout);
+      free(temp);
+      return 0;
+  }
+  #+end_example
+
+  It still spits out error:
+  #+BEGIN_EXAMPLE
+clang -g -O2 -Wall -Isrc -rdynamic -DNDEBUG  -fPIC   -c -o src/libex28.o src/libex28.c
+clang-9: warning: argument unused during compilation: '-rdynamic' [-Wunused-command-line-argument]
+ar rcs build/libYOUR_LIBRARY.a src/libex28.o
+ranlib build/libYOUR_LIBRARY.a
+clang -shared -o build/libYOUR_LIBRARY.so src/libex28.o
+clang -g -O2 -Wall -Isrc -rdynamic -DNDEBUG  build/libYOUR_LIBRARY.a -fsanitize=address    tests/print_string_tests.c   -o tests/print_string_tests
+sh ./tests/runtests.sh
+Running unit tests:
+Dummy!
+./tests/runtests.sh: line 5: 11203 Abort trap: 6           $VALGRIND ./$i 2>> tests/tests.log
+ERROR in test tests/print_string_tests: here's tests/tests.log
+------
+==11203==AddressSanitizer CHECK failed: /tmp/llvm-20191031-70679-1944tjj/llvm-9.0.0.src/projects/compiler-rt/lib/asan/asan_allocator.cc:570 "((m->free_tid)) == ((kInvalidTid))" (0x120, 0xffffff)
+    #0 0x1053dabfe in __asan::AsanCheckFailed(char const*, int, char const*, unsigned long long, unsigned long long) (libclang_rt.asan_osx_dynamic.dylib:x86_64h+0x4dbfe)
+    #1 0x1053f16c7 in __sanitizer::CheckFailed(char const*, int, char const*, unsigned long long, unsigned long long) (libclang_rt.asan_osx_dynamic.dylib:x86_64h+0x646c7)
+    #2 0x105395728 in __asan::Allocator::QuarantineChunk(__asan::AsanChunk*, void*, __sanitizer::BufferedStackTrace*) (libclang_rt.asan_osx_dynamic.dylib:x86_64h+0x8728)
+    #3 0x1053d259a in wrap_free (libclang_rt.asan_osx_dynamic.dylib:x86_64h+0x4559a)
+    #4 0x105389ded in print_string libex28.c:13
+    #5 0x105389e2f in main print_string_tests.c:10
+    #6 0x7fff750483d4 in start (libdyld.dylib:x86_64+0x163d4)
+
+make: *** [tests] Error 1
+  #+END_EXAMPLE
+
+  This is due to we modified the address =temp= points to. By fixing that
+  #+BEGIN_SRC sh :exports both :results verbatim
+cat c-skeleton/src/libex28.c
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  #include <string.h>
+  #include <stdlib.h>
+  #include <stdio.h>
+
+  int print_string(char *source)
+  {
+      char *temp = malloc(strlen(source) + 1);
+      strcpy(temp, source); // Use bad functions on purpose
+
+      for (int i = 0; temp[i]; i++)
+          fputc(temp[i], stdout);
+
+      free(temp);
+      return 0;
+  }
+  #+end_example
+
+  Now test pass:
+  #+BEGIN_EXAMPLE
+clang -g -O2 -Wall -Isrc -rdynamic -DNDEBUG  -fPIC   -c -o src/libex28.o src/libex28.c
+clang-9: warning: argument unused during compilation: '-rdynamic' [-Wunused-command-line-argument]
+ar rcs build/libYOUR_LIBRARY.a src/libex28.o
+ranlib build/libYOUR_LIBRARY.a
+clang -shared -o build/libYOUR_LIBRARY.so src/libex28.o
+clang -g -O2 -Wall -Isrc -rdynamic -DNDEBUG  build/libYOUR_LIBRARY.a -fsanitize=address    tests/print_string_tests.c   -o tests/print_string_tests
+sh ./tests/runtests.sh
+Running unit tests:
+Dummy!
+tests/print_string_tests PASS
+  #+END_EXAMPLE
+
+  Now we check the =check= feature. NOTE: We are not allowed to insert any space
+  character between regex expression range over multilines:
+  #+BEGIN_SRC makefile
+check:
+	@echo Files with potentially dangerous functions.
+	@egrep '[^_.>a-zA-Z0-9](str(n?cpy|n?cat|xfrm|n?dup|str|pbrk|tok|_)\
+|stpn?cpy|a?sn?printf|byte_)' $(SOURCES) || true
+  #+END_SRC
+
+  Then
+  #+BEGIN_SRC sh :exports both :results verbatim
+cd c-skeleton
+make check
+  #+END_SRC
+
+  #+RESULTS:
+  : Files with potentially dangerous functions.
+  :     strcpy(temp, source); // Use bad functions on purpose
+
+  Works as expected.
+
++ Research what functions the =check:= target is looking for in the =BADFUNCS=
+  regular expression that it's using.
+
+  If we expand the regular expression, we got:
+  - =strcpy=
+  - =strncpy=
+  - =strcat=
+  - =strncat=
+  - =strxfrm=
+  - =strdup=
+  - =strndup=
+  - =strstr=
+  - =strpbrk=
+  - =strtok=
+  - =str_=
+  - =stpcpy=
+  - =stpncpy=
+  - =sprintf=
+  - =asprintf=
+  - =snprintf=
+  - =asnprintf=
+  - =byte_=
+
+  To verify this, I made a explanatory file:
+  #+BEGIN_SRC sh :exports both :results verbatim
+cat c-skeleton/src/test_badfuncs.c
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+   strcpy
+   strncpy
+   strcat
+   strncat
+   strxfrm
+   strdup
+   strndup
+   strstr
+   strpbrk
+   strtok
+   str_
+   // What is .str_ for?
+   // Here is the use cases
+   str_test
+   str_something
+   stpcpy
+   stpncpy
+   sprintf
+   asprintf
+   snprintf
+   asnprintf
+   byte_
+   // Go with .str_
+   byte_something
+  #+end_example
+
+  #+BEGIN_SRC sh :exports both :results verbatim
+cd c-skeleton
+make check
+  #+END_SRC
+
+  #+RESULTS:
+  #+begin_example
+  Files with potentially dangerous functions.
+  src/libex28.c:    strcpy(temp, source); // Use bad functions on purpose
+  src/test_badfuncs.c: strcpy
+  src/test_badfuncs.c: strncpy
+  src/test_badfuncs.c: strcat
+  src/test_badfuncs.c: strncat
+  src/test_badfuncs.c: strxfrm
+  src/test_badfuncs.c: strdup
+  src/test_badfuncs.c: strndup
+  src/test_badfuncs.c: strstr
+  src/test_badfuncs.c: strpbrk
+  src/test_badfuncs.c: strtok
+  src/test_badfuncs.c: str_
+  src/test_badfuncs.c: str_test
+  src/test_badfuncs.c: str_something
+  src/test_badfuncs.c: stpcpy
+  src/test_badfuncs.c: stpncpy
+  src/test_badfuncs.c: sprintf
+  src/test_badfuncs.c: asprintf
+  src/test_badfuncs.c: snprintf
+  src/test_badfuncs.c: asnprintf
+  src/test_badfuncs.c: byte_
+  src/test_badfuncs.c: byte_something
+  #+end_example

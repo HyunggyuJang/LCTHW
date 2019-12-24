@@ -1,0 +1,24 @@
+ strcpy
+ strncpy
+ strcat
+ strncat
+ strxfrm
+ strdup
+ strndup
+ strstr
+ strpbrk
+ strtok
+ str_
+ // What is .str_ for?
+ // Here is the use cases
+ str_test
+ str_something
+ stpcpy
+ stpncpy
+ sprintf
+ asprintf
+ snprintf
+ asnprintf
+ byte_
+ // Go with .str_
+ byte_something

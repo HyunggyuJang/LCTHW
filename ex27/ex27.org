@@ -1,0 +1,29 @@
+#+TITLE: Creative and Defensive Programming
+* The Creative Programmer Mind-Set
++ I can't make a mistake.
++ It doesn't matter what people think.
++ Whatever my brain comes up with is going to be a great idea.
+* The Defensive Programmer Mind-Set
++ Software has errors.
++ You aren't your software, yet you're responsible for the errors.
++ You can never remove the errors, only reduce their probability.
+
+
+Actually I found it applies to ourselves; We are not perfect creature and has
+errors on our outputs. We can never remove the errors on that output (or the
+degree of our understanding).
+
+So by being comfortable with those idea, the author assumed which applies to
+programming, we can develop ourselves in a more reasonable human being.
+* The Eight Defensive Programmer Strategies
++ Never Trust Input
++ Prevent Errors
++ Fail Early and Openly
++ Document Assumptions
++ Prevention over Documentation
++ Automate Everything
++ Simplify and Clarify
++ Question Authority
+
+
+The refactored code of =logfind= is following [[file:logfind.c::#define NDEBUG][file]].
