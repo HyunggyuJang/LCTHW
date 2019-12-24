@@ -1,4 +1,5 @@
-CFLAGS=-g -O2 -Wall -Isrc -DNDEBUG $(OPTFLAGS)
+CC=clang						#to work around system defined cc, which linked to system clang
+CFLAGS=-g -O2 -Wall -Isrc -Iinclude -DNDEBUG $(OPTFLAGS)
 LIBS=-ldl $(OPTLIBS)
 PREFIX?=/usr/local
 
@@ -8,23 +9,20 @@ OBJECTS=$(patsubst %.c,%.o,$(SOURCES))
 TEST_SRC=$(wildcard tests/*_tests.c)
 TESTS=$(patsubst %.c,%,$(TEST_SRC))
 
-TARGET=build/libYOUR_LIBRARY.a
-SO_TARGET=$(patsubst %.a,%.so,$(TARGET))
+
+SO_TARGET=build/libex29.so
 
 # The Target Build
-all: $(TARGET) $(SO_TARGET) tests
+all: $(SO_TARGET) tests
 
-dev: CFLAGS=-g -Wall -Isrc -Wextra $(OPTFLAGS)
+dev: CFLAGS=-g -Wall -Isrc -Iinclude -Wextra $(OPTFLAGS)
 dev: all
 
-$(TARGET): CFLAGS += -fPIC
-$(TARGET): build $(OBJECTS)
-	ar rcs $@ $(OBJECTS)
-	ranlib $@
-$(SO_TARGET): $(TARGET) $(OBJECTS)
+# Add this if you got an error
+$(SO_TARGET): build $(OBJECTS)
 	$(CC) -shared -o $@ $(OBJECTS)
 
-$(TESTS): $(TARGET) $(SO_TARGET)
+$(TESTS): $(SO_TARGET)
 
 build:
 	@mkdir -p build
@@ -32,8 +30,9 @@ build:
 
 # The Unit Tests
 .PHONY: tests
-tests: CFLAGS += $(TARGET) -fsanitize=address
+tests: CFLAGS += -fsanitize=address $(LIBS)
 tests: $(TESTS)
+	rm -f tests/tests.log
 	sh ./tests/runtests.sh
 
 # The Cleaner
@@ -46,7 +45,7 @@ clean:
 # The Install
 install: all
 	install -d $(DESTDIR)/$(PREFIX)/lib/
-	install $(TARGET) $(DESTDIR)/$(PREFIX)/lib/
+	install $(SO_TARGET) $(DESTDIR)/$(PREFIX)/lib/
 
 # The Checker
 check:
